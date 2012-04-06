@@ -50,10 +50,6 @@
     </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Lcs.Scheduler.Support, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\heggreenscheduler\Support\bin\Debug\Lcs.Scheduler.Support.dll</HintPath>
-    </Reference>
     <Reference Include="Lcs.ServiceGateAdapter, Version=4.2.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\inetpub\wwwroot\HeliosB\bin\Lcs.ServiceGateAdapter.dll</HintPath>
@@ -72,8 +68,9 @@
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="XmlCommunicator">
-      <HintPath>..\..\..\..\Projekty\XMLCommunicatorCE\bin\Debug\XmlCommunicator.dll</HintPath>
+    <Reference Include="XmlCommunicator, Version=1.0.4479.23095, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\bin\XmlCommunicator.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -104,6 +101,10 @@
     <ProjectReference Include="..\Planning\Planning.csproj">
       <Project>{01A98716-B282-4750-B523-25CC523D461D}</Project>
       <Name>Planning</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Support\Support.csproj">
+      <Project>{22E35E70-F3F1-4D78-B3D8-8B6266B5F320}</Project>
+      <Name>Support</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
