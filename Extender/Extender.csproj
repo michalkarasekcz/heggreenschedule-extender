@@ -116,6 +116,6 @@
   </Target>
   -->
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetPath)" "C:\inetpub\wwwroot\HeliosB\App\Lcs\Scheduler\Apl"</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetDir)$(TargetName).*"  ..\..\..\Bin\*.*</PostBuildEvent>
   </PropertyGroup>
 </Project>
