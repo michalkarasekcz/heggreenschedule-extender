@@ -50,10 +50,6 @@
     </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Lcs.Scheduler.Planning, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\heggreenscheduler\Planning\bin\Debug\Lcs.Scheduler.Planning.dll</HintPath>
-    </Reference>
     <Reference Include="Lcs.Scheduler.Support, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\heggreenscheduler\Support\bin\Debug\Lcs.Scheduler.Support.dll</HintPath>
@@ -103,6 +99,12 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="branch_element.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Planning\Planning.csproj">
+      <Project>{01A98716-B282-4750-B523-25CC523D461D}</Project>
+      <Name>Planning</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
