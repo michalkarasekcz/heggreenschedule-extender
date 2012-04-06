@@ -50,9 +50,9 @@
     </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Lcs.ServiceGateAdapter, Version=4.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Lcs.ServiceGateAdapter, Version=42.0.0.27957, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\inetpub\wwwroot\HeliosB\bin\Lcs.ServiceGateAdapter.dll</HintPath>
+      <HintPath>..\bin\Lcs.ServiceGateAdapter.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
