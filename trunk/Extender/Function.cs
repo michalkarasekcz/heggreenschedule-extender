@@ -33,10 +33,7 @@ namespace Noris.Schedule.Extender
                 args.MenuCaption = "Zaplánuj kombinaci";
                 args.MenuToolTipText = "Zaplánuj kombinaci";
             }
-            return result;
-
-
-            int a = 5;
+            return result;            
         }
 
         bool IFunctionMenuItem.IsMenuItemEnabledFor(Noris.Schedule.Support.Services.FunctionMenuItemRunArgs args)
