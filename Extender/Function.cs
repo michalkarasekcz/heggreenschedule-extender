@@ -520,17 +520,21 @@ namespace Noris.Schedule.Extender
 
         private void _Refresh(ExtenderDataSource data, List<DataPointerStr> splitElements, FunctionMenuItemRunArgs args)
         {
+            // pridam identifikatory radku, ktere se zmenily. Kdyz se na tyto radky klikne, dojde k znovunacteni dat.
             GID gid;
+                      
             foreach (PressFactCombinDataCls combin in data.CombinData)
             {
                 gid = new GID(0x4002, combin.CisloSubjektu);
                 if (!args.ResultEditChangedRows.Contains(gid))
                     args.ResultEditChangedRows.Add(gid);
                 args.ResultEditChangedRows.Add(new GID(22290, combin.CisloObjektu));
+
             }
             args.ResultEditChangedRows.Add(new GID(0x4001, 1));
             foreach (int lisovaUnit in data.LisovnaUnits)
                 args.ResultEditChangedRows.Add(new GID(PlanUnitCCls.ClassNr, lisovaUnit));
+            
         }
 
         private List<KeyValuePair<int, WorkUnitCls>> _GetWorkUnits(CapacityPlanWorkItemCls workItem)
