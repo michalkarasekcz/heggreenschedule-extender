@@ -25,6 +25,9 @@ namespace Noris.Schedule.Extender
     /// </summary>
     public class PressFactCombinDataCls
     {
+        /// <summary>
+        /// Identifikátor zaznamu
+        /// </summary>
         public GID GID { get { return _CombinGID; } set { _CombinGID = value; } }
         private GID _CombinGID;
 
@@ -155,11 +158,12 @@ namespace Noris.Schedule.Extender
             {
                 dSource = new ExtenderDataSource(planningProcess, lisovna);
                 GraphDeclarationCls topGraph, bottomGraph;
+                // graf kapacitnich jednotek
                 topGraph = new GraphDeclarationCls(RowGraphMode.TaskCapacityLink, PlanUnitCCls.ClassNr, dSource, tag, lisovna.Value, GraphPositionType.TopPart);
                 topGraph.TargetGraphActivityOnClick = TargetGraphCrossActivityMode.OnThisPage;
-                topGraph.CurrentGraphActivityOnClick = CurrentGraphCrossActivityMode.InactiveWhenInvisible | CurrentGraphCrossActivityMode.FindByDataSource | CurrentGraphCrossActivityMode.SelectElements | CurrentGraphCrossActivityMode.ActivateFirstEqualRow | CurrentGraphCrossActivityMode.ShowRelationNet | CurrentGraphCrossActivityMode.StopProcess;
+                topGraph.CurrentGraphActivityOnClick = CurrentGraphCrossActivityMode.InactiveWhenInvisible | CurrentGraphCrossActivityMode.FindByDataSource | CurrentGraphCrossActivityMode.SelectElements | CurrentGraphCrossActivityMode.ActivateFirstEqualRow | CurrentGraphCrossActivityMode.ShowRelationNet | CurrentGraphCrossActivityMode.StopProcess;                                
                 args.GraphDeclarationList.Add(topGraph);
-                
+                // graf planovanych Kombinaci
                 bottomGraph  = new GraphDeclarationCls(RowGraphMode.TaskCapacityLink, 0x4002, dSource, tag, "Kombinace", GraphPositionType.BottomPart);
                 bottomGraph.TargetGraphActivityOnClick= TargetGraphCrossActivityMode.OnThisPage;
                 bottomGraph.CurrentGraphActivityOnClick = CurrentGraphCrossActivityMode.InactiveWhenInvisible | CurrentGraphCrossActivityMode.FindByDataSource | CurrentGraphCrossActivityMode.SelectElements | CurrentGraphCrossActivityMode.ActivateFirstEqualRow | CurrentGraphCrossActivityMode.SelectParentTopRow | CurrentGraphCrossActivityMode.OpenActiveTreeNodes | CurrentGraphCrossActivityMode.StopProcess;
@@ -213,8 +217,9 @@ namespace Noris.Schedule.Extender
         /// Seznam všech konkrétních kombinací po položkách.
         /// </summary>
         public List<PressFactCombinDataCls> CombinData;
-        /// <summary>
-        /// Seznam všech spojovacích záznamů operace.
+        ///// <summary>
+        ///// Seznam všech spojovacích záznamů operace.
+        
         /// <summary>
         /// Všechny KPJ se zdrojem pracoviště Lisovna 
         /// </summary>
@@ -549,18 +554,19 @@ namespace Noris.Schedule.Extender
         #endregion
 
         #region ReadRows
+        bool start = true;
         private void _ReadRows(DataSourceRequest requestInput)
         {
             DataSourceRequestReadRows request;
-
+            
             request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadRows>(requestInput);
             switch (request.RequestRowGId.ClassNumber)
             {
-                case PlanUnitCCls.ClassNr:
+                case PlanUnitCCls.ClassNr:  // kapacitni jednotky
                     _ReadRowsKPJ(request);
                     break;
                 case 0x4002:
-                    _ReadRowsCombin(request);
+                    _ReadRowsCombin(request); // jednotlive konkretni kombinace
                     break;
             }
         }
@@ -623,6 +629,7 @@ namespace Noris.Schedule.Extender
 
         private void _ReadRowsCombin(DataSourceRequestReadRows request)
         {
+
             if (CombinData != null)
             {
                 int lastCisloSubjektu;
@@ -632,25 +639,75 @@ namespace Noris.Schedule.Extender
                 lastCisloSubjektu = 0;
                 parentRowGID = GID.Empty;
                 CombinData.Sort(PressFactCombinDataCls.CompareByReference);
-                foreach (PressFactCombinDataCls combin in CombinData)
-                {
-                    if (combin.CisloSubjektu != lastCisloSubjektu)
+
+                if (request.RequestRowGId.RecordNumber > 0) // cislo zaznamu, ktere pozaduje subRows
+                {                                    
+                    // vsechny kombinace se stejnym cislem subjektu jako je TopRow
+                    IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber); 
+                    foreach (PressFactCombinDataCls combin in combins)
                     {
-                        parentRowGID = new GID(0x4002, combin.CisloSubjektu);
-                        planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
+                        combin.ParentGID = request.RequestRowGId;
+                        rowGID = new GID(22290, combin.CisloObjektu);
+                        combin.GID = rowGID;
+                        planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
+                        planningRow.ParentGId = request.RequestRowGId;
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
-                        lastCisloSubjektu = combin.CisloSubjektu;
                     }
-                    combin.ParentGID = parentRowGID;
-                    rowGID = new GID(22290, combin.CisloObjektu);
-                    combin.GID = rowGID;
-                    planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
-                    planningRow.ParentGId = parentRowGID;
-                    planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
-                    request.ResultItems.Add(planningRow);
+
+                
                 }
+                else // nactu vsechny zaznamy do grafu
+                    foreach (PressFactCombinDataCls combin in CombinData)
+                    {
+                        if (combin.CisloSubjektu != lastCisloSubjektu) // nalezena nova kombinace
+                        {
+                            parentRowGID = new GID(0x4002, combin.CisloSubjektu);
+                            planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
+                            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+                            request.ResultItems.Add(planningRow);
+                            lastCisloSubjektu = combin.CisloSubjektu;
+                        }
+                        combin.ParentGID = parentRowGID;
+                        rowGID = new GID(22290, combin.CisloObjektu);
+                        combin.GID = rowGID;
+                        planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
+                        planningRow.ParentGId = parentRowGID;
+                        planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+                        request.ResultItems.Add(planningRow);
+                    }
             }
+
+
+
+            //if (CombinData != null)
+            //{                
+            //    int lastCisloSubjektu;
+            //    GID parentRowGID, rowGID;
+            //    PlanningVisualDataRowCls planningRow;
+
+            //    lastCisloSubjektu = 0;
+            //    parentRowGID = GID.Empty;
+            //    CombinData.Sort(PressFactCombinDataCls.CompareByReference);
+            //    foreach (PressFactCombinDataCls combin in CombinData)
+            //    {
+            //        if (combin.CisloSubjektu != lastCisloSubjektu)
+            //        {
+            //            parentRowGID = new GID(0x4002, combin.CisloSubjektu);
+            //            planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
+            //            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+            //            request.ResultItems.Add(planningRow);
+            //            lastCisloSubjektu = combin.CisloSubjektu;
+            //        }
+            //        combin.ParentGID = parentRowGID;
+            //        rowGID = new GID(22290, combin.CisloObjektu);
+            //        combin.GID = rowGID;
+            //        planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
+            //        planningRow.ParentGId = parentRowGID;
+            //        planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+            //        request.ResultItems.Add(planningRow);
+            //    }
+            //}
         }
         #endregion
 
