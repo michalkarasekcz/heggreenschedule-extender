@@ -631,33 +631,34 @@ namespace Noris.Schedule.Extender
         {
 
             if (CombinData != null)
-            {
-                int lastCisloSubjektu;
+            {               
                 GID parentRowGID, rowGID;
-                PlanningVisualDataRowCls planningRow;
-
-                lastCisloSubjektu = 0;
+                PlanningVisualDataRowCls planningRow;               
                 parentRowGID = GID.Empty;
-                CombinData.Sort(PressFactCombinDataCls.CompareByReference);
-
-                if (request.RequestRowGId.RecordNumber > 0) // cislo zaznamu, ktere pozaduje subRows
-                {                                    
-                    // vsechny kombinace se stejnym cislem subjektu jako je TopRow
-                    IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber); 
+             
+                // dosel pozadavek na radky (subrows) pro urcity zaznam konkretni kombinace vylisku (TopRow). RecodrNumber v requestu je >0
+                if (request.RequestRowGId.RecordNumber > 0) 
+                {
+                    // vsechny kombinace vylisku se stejnym cislem subjektu jako je TopRow
+                    IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber);
+                    // pridam prazdne radky do grafu, jako subradky k TopRow
                     foreach (PressFactCombinDataCls combin in combins)
                     {
                         combin.ParentGID = request.RequestRowGId;
                         rowGID = new GID(22290, combin.CisloObjektu);
                         combin.GID = rowGID;
                         planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
-                        planningRow.ParentGId = request.RequestRowGId;
+                        // Novemu radku rikam, ze jeho nadrazeny radek je radek, ktery zada o data
+                        planningRow.ParentGId = request.RequestRowGId; 
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
-                    }
 
-                
+                    }
                 }
                 else // nactu vsechny zaznamy do grafu
+                {
+                    int lastCisloSubjektu = 0;
+                    CombinData.Sort(PressFactCombinDataCls.CompareByReference); // setridim vsechny polozky
                     foreach (PressFactCombinDataCls combin in CombinData)
                     {
                         if (combin.CisloSubjektu != lastCisloSubjektu) // nalezena nova kombinace
@@ -676,6 +677,7 @@ namespace Noris.Schedule.Extender
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
                     }
+                }
             }
 
 
@@ -712,6 +714,10 @@ namespace Noris.Schedule.Extender
         #endregion
 
         #region ReadElements
+        /// <summary>
+        /// Nacte do grafu graficke elementy Kapacitnich jednotek,kombinaci...
+        /// </summary>
+        /// <param name="requestInput"></param>
         private void _ReadElements(DataSourceRequest requestInput)
 		{
             DataSourceRequestReadElements request;
@@ -726,8 +732,8 @@ namespace Noris.Schedule.Extender
                 case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
                     _ReadElementsWorkUnit(request, request.RequestRowGId.RecordNumber, true, true);
                     break;
-                case 0x4002:
-                case 22290:                // kombinace
+                case 0x4002:               // TopRows kombinaci
+                case 22290:                // SubRows kombinace
                     foreach (int planUnitC in LisovnaUnits)
                         _ReadElementsWorkUnit(request, planUnitC, false, false);
                     break;
