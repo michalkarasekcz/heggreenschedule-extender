@@ -834,8 +834,21 @@ namespace Noris.Schedule.Extender
 
             elementGID = new GID(Planning.ProcessData.Constants.ClassNumberWork, workUnit.WorkID);
             workGID = new GID(Planning.ProcessData.Constants.ClassNumberTask, workUnit.TaskID);
-            timeRange = workUnit.WorkTime;
-            result = new PlanningVisualDataElementCls(elementGID, rowGID, 0, workGID, timeRange);
+            timeRange = workUnit.WorkTime;            
+            //int tridaToolTip = 0;
+            
+            //// tady definuji tridy tooltipu
+            //switch (rowGID.ClassNumber)
+            //{ 
+            //    case 0x4002: // hlavicka kombinaci
+            //    case 22290: // polozky kombinaci
+            //        tridaToolTip = 1817;   //
+            //        break;
+               
+               
+            //}
+
+            result = new PlanningVisualDataElementCls(elementGID, rowGID, 1817, workGID, timeRange);
             editMode = DataElementEditingMode.Movable;
             result.UseRatio = (float)workUnit.UseRatio;
             result.LinkGroup = workUnit.TaskData.LinkGroup;
