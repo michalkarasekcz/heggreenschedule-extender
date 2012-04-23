@@ -210,7 +210,7 @@ namespace Noris.Schedule.Extender
 	/// <summary>
 	/// Datový zdroj, který využívá služeb plánovacího procesu
 	/// </summary>
-	public class ExtenderDataSource : IDataSource
+    public class ExtenderDataSource : IDataSource, IClassTreeExtender, IEvaluationDataSource
 	{
         public static ConnParamStruct ConnParam;
         /// <summary>
@@ -1029,7 +1029,41 @@ namespace Noris.Schedule.Extender
 			return (T)row[column];
 		}
 		#endregion
-	}
+
+        #region IEvaluationDataSource Members
+
+        public bool TryGetDataObject(EvaluationDataSourceGetObjectArgs args)
+        {
+            return ((IEvaluationDataSource)PlanningProcess).TryGetDataObject(args);
+        }
+
+        public bool TryGetDataRelated(EvaluationDataSourceGetRelatedObjectArgs args)
+        {
+            return ((IEvaluationDataSource)PlanningProcess).TryGetDataRelated(args);
+        }
+
+        public bool TryGetValue(EvaluationDataSourceGetValueArgs args)
+        {
+            return ((IEvaluationDataSource)PlanningProcess).TryGetValue(args);
+        }
+
+        #endregion
+
+        #region IClassTreeExtender Members
+
+        public void GetExtendedAttributes(ClassTreeExtenderGetAttributesArgs args)
+        {
+            ((IClassTreeExtender)PlanningProcess).GetExtendedAttributes(args);
+
+        }
+
+        public void GetExtendedRelations(ClassTreeExtenderGetRelationsArgs args)
+        {
+            ((IClassTreeExtender)PlanningProcess).GetExtendedRelations(args);
+        }
+
+        #endregion
+    }
 	#endregion
 
     #region DEFAULT PAINTER - pro graf TaskCapacityLink a vrstvu ItemLayer
