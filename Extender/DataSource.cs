@@ -212,6 +212,10 @@ namespace Noris.Schedule.Extender
 	/// </summary>
     public class ExtenderDataSource : IDataSource, IClassTreeExtender, IEvaluationDataSource
 	{
+        /// <summary>
+        /// ExtGat
+        /// </summary>
+        private const string ToolTipSuffix = "ExtGat";
         public static ConnParamStruct ConnParam;
         /// <summary>
         /// Seznam všech konkrétních kombinací po položkách.
@@ -820,6 +824,7 @@ namespace Noris.Schedule.Extender
             workGID = GID.Empty;
             timeRange = level.Time;
             result = new PlanningVisualDataElementCls(elementGID, rowGID, 0, workGID, level.Time);
+            result.SuffixKeyForToolTip = ToolTipSuffix;
             result.SetElementProperty(GraphElementLayerType.SubLayer, DataElementEditingMode.FixedLinkItemsOnSameThread, GraphElementVisualType.Type1);
 
             return result;
@@ -847,8 +852,9 @@ namespace Noris.Schedule.Extender
                
                
             //}
-
+            
             result = new PlanningVisualDataElementCls(elementGID, rowGID, 1817, workGID, timeRange);
+            result.SuffixKeyForToolTip = ToolTipSuffix;
             editMode = DataElementEditingMode.Movable;
             result.UseRatio = (float)workUnit.UseRatio;
             result.LinkGroup = workUnit.TaskData.LinkGroup;
