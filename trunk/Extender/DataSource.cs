@@ -384,34 +384,43 @@ namespace Noris.Schedule.Extender
 		/// <param name="request">Požadovaná operace</param>
 		void IDataSource.RunRequestSync(DataSourceRequest request)
 		{
+            
 			this.RunRequest(request);
 		}
 		#endregion
 
         public void RunRequest(DataSourceRequest request)
 		{
-			switch (request.RequestType)
-			{
-                case DataSourceRequestType.QueryAboutRequest:
-                    _QueryAboutRequest(request);
-                    break;
-                case DataSourceRequestType.TopLevelRead:
-				case DataSourceRequestType.SubRowsRead:
-					_ReadRows(request);
-					break;
-				case DataSourceRequestType.ElementsRead:
-					_ReadElements(request);
-					break;
-                case DataSourceRequestType.FindInterGraphTargetData:
-                    _FindInterGraphTargetData(request);
-                    break;
-                case DataSourceRequestType.CreateDataRelationNet:
-                    _CreateRelations(request);
-                    break;
-                case DataSourceRequestType.RunDataFunction:
-                    _RunDataFunction(request);
-                    break;
-            }
+            //try
+            //{
+                switch (request.RequestType)
+                {
+                    case DataSourceRequestType.QueryAboutRequest:
+                        _QueryAboutRequest(request);
+                        break;
+                    case DataSourceRequestType.TopLevelRead:
+                    case DataSourceRequestType.SubRowsRead:
+                        _ReadRows(request);
+                        break;
+                    case DataSourceRequestType.ElementsRead:
+                        _ReadElements(request);
+                        break;
+                    case DataSourceRequestType.FindInterGraphTargetData:
+                        _FindInterGraphTargetData(request);
+                        break;
+                    case DataSourceRequestType.CreateDataRelationNet:
+                        _CreateRelations(request);
+                        break;
+                    case DataSourceRequestType.RunDataFunction:
+                        _RunDataFunction(request);
+                        break;
+                }
+            //}
+            //catch(Exception ex)
+            //{                 
+            //    MessageInfo i = new MessageInfo(ex.Message);
+            //    Throw.SysError(i);            
+            //}
         }
 
         #region QueryAboutRequest
