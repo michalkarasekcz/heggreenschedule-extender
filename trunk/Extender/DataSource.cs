@@ -985,7 +985,7 @@ namespace Noris.Schedule.Extender
                 if (lastWorkUnit != null)
                 {
                     pointerLast = new DataPointerStr(rowGID, lastWorkUnit.DataPointer.Element);
-                    request.ResultRelations.Add(new Support.Services.DataRelation(pointerLast, ElementRelationOrientation.Parallel, pointer));
+                    request.ResultRelations.Add(new Support.Services.DataRelation(pointerLast, ElementRelationOrientation.Parallel,false, pointer));
                 }
                 lastWorkUnit = workUnit;
             }
@@ -1026,9 +1026,9 @@ namespace Noris.Schedule.Extender
                             pointerRight = new DataPointerStr(rowGID, rightWorkUnit.DataPointer.Element);
                             pointerLeft = new DataPointerStr(rowGID, leftWorkUnit.DataPointer.Element);
                             if (!reverse)
-                                request.ResultRelations.Add(new Support.Services.DataRelation(pointerLeft, ElementRelationOrientation.Parallel, pointerRight));
+                                request.ResultRelations.Add(new Support.Services.DataRelation(pointerLeft, ElementRelationOrientation.Parallel, false, pointerRight));
                             else
-                                request.ResultRelations.Add(new Support.Services.DataRelation(pointerRight, ElementRelationOrientation.Parallel, pointerLeft));
+                                request.ResultRelations.Add(new Support.Services.DataRelation(pointerRight, ElementRelationOrientation.Parallel, false, pointerLeft));
                         }
                     }
                 }
