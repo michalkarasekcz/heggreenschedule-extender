@@ -321,6 +321,7 @@ namespace Noris.Schedule.Extender
 
         private List<DataPointerStr> _Split(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, decimal qty, ref FunctionMenuItemRunArgs args)
         {
+            // combinItemsFirstWorkItem - > prvni vyrobni operace
             List<DataPointerStr> result;
             Dictionary<CapacityPlanWorkItemCls, int> workItemsParalel;
 
@@ -382,8 +383,15 @@ namespace Noris.Schedule.Extender
 
                     data.PlanningProcess.PlanningData.InteractiveSplitAxisS(splitArgs);
                     splitArgs.ChangedRowsCopyTo(args);
-                    splitArgPom = splitArgs.SplitItemList.Find(a => (int)a.Tag == 1);
-                    result = splitArgPom.ResultElementPointerList;
+                    // 14.9.2012
+                    foreach (var si in splitArgs.SplitItemList)
+                    {
+                        if (si.Tag != null && (int)si.Tag > 0)
+                            result.AddRange(si.ResultElementPointerList);
+                    }
+
+                    //splitArgPom = splitArgs.SplitItemList.Find(a => (int)a.Tag == 1);
+                    //result = splitArgPom.ResultElementPointerList;
                 }
                 else
                     result.Add(workUnits[0].Value.DataPointer);
