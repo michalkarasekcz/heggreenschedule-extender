@@ -64,6 +64,13 @@ namespace Noris.Schedule.Extender
                 _Refresh(data, splitElements, args);
                 MessageBox.Show("Úspěšné ukončení funkce.");
             }
+
+
+
+            /*
+             * 
+             * Pokus
+             * 
         }
 
         private bool _SetParams(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, out decimal pocet_zalisu, out DateTime startTime, out int workplace)
