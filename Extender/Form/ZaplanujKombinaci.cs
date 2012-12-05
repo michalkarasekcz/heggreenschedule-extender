@@ -15,12 +15,12 @@ namespace Noris.Schedule.Extender
         public bool OK;
         public ExtenderDataSource Data;
         public Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> CombinItemsFirstTask;
-        public decimal Qty;
+        public decimal Pocet_zalisu{get;private set;}
         public DateTime StartTime;
         public List<KeyValuePair<int, string>> WorkplaceList;
         public int Workplace;
 
-        public ZaplanujKombinaci(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, decimal qty, List<KeyValuePair<int, string>> workplaceList)
+        public ZaplanujKombinaci(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, decimal pocet_zalisu, List<KeyValuePair<int, string>> workplaceList)
         {
             InitializeComponent();
             AcceptButton = okBtn;
@@ -28,13 +28,13 @@ namespace Noris.Schedule.Extender
 
             Data = data;
             CombinItemsFirstTask = combinItemsFirstWorkItem;
-            Qty = qty;
+            Pocet_zalisu = pocet_zalisu;
             WorkplaceList = workplaceList;
         }
 
         private void _FillParams(object sender, EventArgs e)
         {
-            qtyTbx.Text = Qty.ToString();
+            qtyTbx.Text = Pocet_zalisu.ToString();
             workplaceCbx.DataSource = WorkplaceList;
         }
 
@@ -51,7 +51,7 @@ namespace Noris.Schedule.Extender
 
         private void _ReturnParams(object sender, FormClosedEventArgs e)
         {
-            Qty = Convert.ToDecimal(qtyTbx.Text);
+            Pocet_zalisu = Convert.ToDecimal(qtyTbx.Text);
             StartTime = startTimeDtp.Value;
             Workplace = (workplaceCbx.SelectedItem == null) ? 0 : ((KeyValuePair<int, string>)workplaceCbx.SelectedItem).Key;
         }

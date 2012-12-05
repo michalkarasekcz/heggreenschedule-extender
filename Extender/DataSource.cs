@@ -101,20 +101,24 @@ namespace Noris.Schedule.Extender
             return comp1.CompareTo(comp2);
         }
         /// <summary>
-        /// Vybere vsechny polozky pro jednu konkretni kombinaci vylisku
+        /// Vybere vsechny polozky konkretni pro jednu konkretni kombinaci vylisku
         /// </summary>
         /// <param name="CombinData"></param>
         /// <param name="recordNumber"></param>
         /// <returns></returns>
         public static List<PressFactCombinDataCls> GetPressFactCombin(List<PressFactCombinDataCls> CombinData, int recordNumber)
         {
+
+            // Z polozek konkretnich kombinaci vyberu vsechny s urcitym cislem_subjektu
+            return CombinData.Where(item => item.CisloSubjektu == recordNumber).ToList<PressFactCombinDataCls>();
+            /*
             List<PressFactCombinDataCls> result;
             result = CombinData.FindAll(
                 delegate(PressFactCombinDataCls combin)
                 {
                     return (combin.CisloSubjektu == recordNumber);
                 });
-            return result;
+            return result;*/
         }
     }
     #endregion
@@ -208,7 +212,8 @@ namespace Noris.Schedule.Extender
 
     #region ExtenderDataSource
 	/// <summary>
-	/// Datový zdroj, který využívá služeb plánovacího procesu
+	/// Datový zdroj, který využívá služeb plánovacího procesu,
+    /// Datovy zdroj je spojen s konktertnim grafem planovaci tabule
 	/// </summary>
     public class ExtenderDataSource : IDataSource, IClassTreeExtender, IEvaluationDataSource
 	{
@@ -233,7 +238,7 @@ namespace Noris.Schedule.Extender
         public MfrPlanningConnectorCls PlanningProcess;
 
         public ExtenderDataSource()
-        {
+        {            
         }
 
         public ExtenderDataSource(MfrPlanningConnectorCls planningProcess, KeyValuePair<int, string> lisovna)
@@ -391,8 +396,7 @@ namespace Noris.Schedule.Extender
 
         public void RunRequest(DataSourceRequest request)
 		{
-            //try
-            //{
+            // touto metedou , ktera je soucasti interface IDatSource, tabule dava planovaci tabule datovemu zdroji pozadavek na nova data
                 switch (request.RequestType)
                 {
                     case DataSourceRequestType.QueryAboutRequest:
@@ -415,12 +419,7 @@ namespace Noris.Schedule.Extender
                         _RunDataFunction(request);
                         break;
                 }
-            //}
-            //catch(Exception ex)
-            //{                 
-            //    MessageInfo i = new MessageInfo(ex.Message);
-            //    Throw.SysError(i);            
-            //}
+           
         }
 
         #region QueryAboutRequest
@@ -583,7 +582,10 @@ namespace Noris.Schedule.Extender
                     break;
             }
         }
-
+        /// <summary>
+        /// Nacte zaznamy o kapacitnich jednotkach (jednotlive lisy) a vykresli je do grafu
+        /// </summary>
+        /// <param name="request"></param>
         private void _ReadRowsKPJ(DataSourceRequestReadRows request)
         {
             Dictionary<int, CapacityUnitCls> units;
@@ -597,11 +599,11 @@ namespace Noris.Schedule.Extender
             rowGID = new GID(0x4001, 1); //třída = 0x4001, běžně se v databázích nepoužívá
             
             planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, "LISY", Lisovna.Value, false, String.Empty);
-            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;                       
+            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;// nastavim vlastnost graficke vrstvy radku, abzc pri poklepani se cely radek zazoomoval na vsechny 
             request.ResultItems.Add(planningRow);
 
             // Ostatní řádky - jednotlivé lisy
-            units = PlanningProcess.DataCapacityUnit;
+            units = PlanningProcess.DataCapacityUnit;    // seznam vsech lisu
             links = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key); /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/
             foreach (CapacityUnitCls unit in units.Values)
             {
@@ -639,7 +641,10 @@ namespace Noris.Schedule.Extender
             }
             return result;
         }
-
+        /// <summary>
+        /// Nacten vsech komktertnich kombinaci vylisku do grafu
+        /// </summary>
+        /// <param name="request"></param>
         private void _ReadRowsCombin(DataSourceRequestReadRows request)
         {
 
@@ -653,13 +658,14 @@ namespace Noris.Schedule.Extender
                 if (request.RequestRowGId.RecordNumber > 0) 
                 {
                     // vsechny kombinace vylisku se stejnym cislem subjektu jako je TopRow
-                    IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber);
+                    IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber); // vyberu vsechny kombinace, ktere nalezi k jednou zaznau grafu
                     // pridam prazdne radky do grafu, jako subradky k TopRow
                     foreach (PressFactCombinDataCls combin in combins)
                     {
                         combin.ParentGID = request.RequestRowGId;
                         rowGID = new GID(22290, combin.CisloObjektu);
                         combin.GID = rowGID;
+                        // Vytvorim objekt reprezentujici zaznam kombinaci jako grafiky radek v grafu planovaci tabule
                         planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
                         // Novemu radku rikam, ze jeho nadrazeny radek je radek, ktery zada o data
                         planningRow.ParentGId = request.RequestRowGId; 
@@ -1164,4 +1170,81 @@ namespace Noris.Schedule.Extender
         { }
     }
     #endregion
+
+
+
+/*
+    class aaa : IDataSource
+    {
+        #region IDataSource Members
+
+        public DataSourceProperties Properties
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public bool AcceptRequestAsync
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public void RunRequestSync(DataSourceRequest request)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RunRequestAsync(DataSourceRequest request)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool WaitAsyncQueue
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public int AsynchronousOperationCount
+        {
+            get { throw new NotImplementedException(); }
+        }
+
+        public void ActivateAsyncRequestForGraphId(int activeGraphId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Action<DataSourceRequest> RequestCompleted
+        {
+            get
+            {
+                throw new NotImplementedException();
+            }
+            set
+            {
+                throw new NotImplementedException();
+            }
+        }
+
+        public event WorkQueueCountChangedDelegate AsyncRequestCountChanged;
+
+        public Color GetColorForElement(RowGraphMode graphType, GraphElementVisualType visualType)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IEnumerable<GID> GetNearbyGIDs(GID gID, ElementRelationOrientation orientation)
+        {
+            throw new NotImplementedException();
+        }
+
+        #endregion
+    }
+    */
 }
