@@ -43,9 +43,9 @@
             this.lqtyLbl.AutoSize = true;
             this.lqtyLbl.Location = new System.Drawing.Point(25, 22);
             this.lqtyLbl.Name = "lqtyLbl";
-            this.lqtyLbl.Size = new System.Drawing.Size(54, 13);
+            this.lqtyLbl.Size = new System.Drawing.Size(67, 13);
             this.lqtyLbl.TabIndex = 0;
-            this.lqtyLbl.Text = "Množství:";
+            this.lqtyLbl.Text = "Počet zálisů:";
             // 
             // qtyTbx
             // 
@@ -127,8 +127,8 @@
             this.Controls.Add(this.lqtyLbl);
             this.Name = "ZaplanujKombinaci";
             this.Text = "ZaplanujKombinaci";
-            this.Load += new System.EventHandler(this._FillParams);
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this._ReturnParams);
+            this.Load += new System.EventHandler(this._FillParams);
             this.ResumeLayout(false);
             this.PerformLayout();
 
