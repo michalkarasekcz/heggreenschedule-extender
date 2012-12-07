@@ -117,6 +117,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(522, 190);
+            this.ControlBox = false;
             this.Controls.Add(this.startTimeDtp);
             this.Controls.Add(this.workplaceCbx);
             this.Controls.Add(this.label2);
@@ -125,8 +126,11 @@
             this.Controls.Add(this.okBtn);
             this.Controls.Add(this.qtyTbx);
             this.Controls.Add(this.lqtyLbl);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
             this.Name = "ZaplanujKombinaci";
-            this.Text = "ZaplanujKombinaci";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            this.Text = "Zaplánuj kombinaci";
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this._ReturnParams);
             this.Load += new System.EventHandler(this._FillParams);
             this.ResumeLayout(false);
