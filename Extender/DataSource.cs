@@ -1,18 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Data;
 using System.Drawing;
-
+using System.Linq;
+using Noris.Schedule.Planning.DataFace;
+using Noris.Schedule.Planning.ProcessData;
 using Noris.Schedule.Support;
 using Noris.Schedule.Support.Core;
-using Noris.Schedule.Support.Services;
 using Noris.Schedule.Support.Data;
+using Noris.Schedule.Support.Services;
 using Noris.Schedule.Support.Sql;
-
-using Noris.Schedule.Planning.ProcessData;
-using Noris.Schedule.Planning.DataFace;
 
 //using XmlCommunicator;
 
@@ -234,8 +232,8 @@ namespace Noris.Schedule.Extender
         /// </summary>
         public List<int> LisovnaUnits;
 
-        public KeyValuePair<int, string> Lisovna; 
-        public MfrPlanningConnectorCls PlanningProcess;
+        public KeyValuePair<int, string> Lisovna {get;private set;}
+        public MfrPlanningConnectorCls PlanningProcess { get; private set; }
 
         public ExtenderDataSource()
         {            
@@ -574,10 +572,10 @@ namespace Noris.Schedule.Extender
             request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadRows>(requestInput);
             switch (request.RequestRowGId.ClassNumber)
             {
-                case PlanUnitCCls.ClassNr:  // kapacitni jednotky
+                case PlanUnitCCls.ClassNr:  // kapacitni jednotky (horni graf)
                     _ReadRowsKPJ(request);
                     break;
-                case 0x4002:
+                case 0x4002:                // spodni graf
                     _ReadRowsCombin(request); // jednotlive konkretni kombinace
                     break;
             }
@@ -587,40 +585,26 @@ namespace Noris.Schedule.Extender
         /// </summary>
         /// <param name="request"></param>
         private void _ReadRowsKPJ(DataSourceRequestReadRows request)
-        {
-            Dictionary<int, CapacityUnitCls> units;
-            List<PlanCSourceLinkCls> links;
-            PlanningVisualDataRowCls planningRow;
-            GID rowGID;
-
-            LisovnaUnits = new List<int>();
-            
+        {                        
+            PlanningVisualDataRowCls planningRow;                                
             // První řádek - společný pro všechny lisy
-            rowGID = new GID(0x4001, 1); //třída = 0x4001, běžně se v databázích nepoužívá
+            GID rowGID = new GID(0x4001, 1); //třída = 0x4001, běžně se v databázích nepoužívá
             
             planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, "LISY", Lisovna.Value, false, String.Empty);
             planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;// nastavim vlastnost graficke vrstvy radku, abzc pri poklepani se cely radek zazoomoval na vsechny 
             request.ResultItems.Add(planningRow);
-
-            // Ostatní řádky - jednotlivé lisy
-            units = PlanningProcess.DataCapacityUnit;    // seznam vsech lisu
-            links = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key); /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/
-            foreach (CapacityUnitCls unit in units.Values)
+                        
+            // vrati cisla kapacitch planovacich jednotek(konkretnich lisu), ktere jsou navazany na konkretni lisovnu 
+            LisovnaUnits = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key).Select(item=> item.PlanUnitC).ToList<int>() ; /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/                        
+            // ze vsech kapacitnich jednotek vyberu jen ty, ktere patri do Lisovny a vytvorim pro ne radky do grafu        
+            foreach (var unit in PlanningProcess.DataCapacityUnit.Values.Where(item => LisovnaUnits.Contains(item.PlanUnitData.RecordNumber)))
             {
-                
-                int i = 0;
-                while (i < links.Count)
-                {
-                    if (links[i].PlanUnitC == unit.PlanUnitData.RecordNumber)
-                    {
-                        planningRow = new PlanningVisualDataRowCls(unit.PlanUnitData.GId, request.RequestedGraphMode, unit.PlanUnitData.Reference, _GetName(unit.PlanUnitC), false, String.Empty);
-                        request.ResultItems.Add(planningRow);
-                        planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;                                                                 
-                        LisovnaUnits.Add(unit.PlanUnitData.RecordNumber);
-                    }
-                    i++;
-                }
-            }
+                planningRow = new PlanningVisualDataRowCls(unit.PlanUnitData.GId, request.RequestedGraphMode, unit.PlanUnitData.Reference, _GetName(unit.PlanUnitC), false, String.Empty);
+                request.ResultItems.Add(planningRow);
+                planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+                planningRow.ElementList = _ReadALLElements(planningRow.GId);
+               // planningRow.AllElementsLoaded = true;                         
+            }                          
         }
 
         private string _GetName(int unit)
@@ -631,13 +615,10 @@ namespace Noris.Schedule.Extender
 
             result = String.Empty;
             links = PlanningProcess.CapacityData.FindLinksToSourceForCapacityUnit(unit);
-            foreach (PlanCSourceLinkCls link in links)
+            foreach (PlanCSourceLinkCls link in links.Where(item => item.CSource != Lisovna.Key))
             {
-                if (link.CSource != Lisovna.Key)    
-                {
-                    source = PlanningProcess.CapacityData.FindCapacitySource(link.CSource);
-                    result = source.Nazev;
-                }
+                source = PlanningProcess.CapacityData.FindCapacitySource(link.CSource);
+                result = source.Nazev;
             }
             return result;
         }
@@ -647,7 +628,6 @@ namespace Noris.Schedule.Extender
         /// <param name="request"></param>
         private void _ReadRowsCombin(DataSourceRequestReadRows request)
         {
-
             if (CombinData != null)
             {               
                 GID parentRowGID, rowGID;
@@ -671,7 +651,8 @@ namespace Noris.Schedule.Extender
                         planningRow.ParentGId = request.RequestRowGId; 
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
-
+                        planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                        planningRow.AllElementsLoaded = true;
                     }
                 }
                 else // nactu vsechny zaznamy do grafu
@@ -684,9 +665,11 @@ namespace Noris.Schedule.Extender
                         {
                             parentRowGID = new GID(0x4002, combin.CisloSubjektu);
                             planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
-                            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
-                            request.ResultItems.Add(planningRow);
+                            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;                           
                             lastCisloSubjektu = combin.CisloSubjektu;
+                            planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                            planningRow.AllElementsLoaded = true;
+                            request.ResultItems.Add(planningRow);
                         }
                         combin.ParentGID = parentRowGID;
                         rowGID = new GID(22290, combin.CisloObjektu);
@@ -695,6 +678,9 @@ namespace Noris.Schedule.Extender
                         planningRow.ParentGId = parentRowGID;
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
+                        // nactu vsechny elementy do grafickeho radku
+                        planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                        planningRow.AllElementsLoaded = true;
                     }
                 }
             }
@@ -759,6 +745,101 @@ namespace Noris.Schedule.Extender
             }
 		}
 
+
+        private List<IDataElement> _ReadALLElements(GID rowGID)
+        {
+            List<IDataElement> elements = new List<IDataElement>();
+            switch (rowGID.ClassNumber)
+            {
+                case 0x4001:              // Řádek "společný za více KPJ"
+                    foreach (int planUnitC in LisovnaUnits)
+                         elements.AddRange(_ReadALLElementsWorkUnit(rowGID, planUnitC, false, false));
+                    break;
+                case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
+                   elements.AddRange(_ReadALLElementsWorkUnit(rowGID, rowGID.RecordNumber, true, true));
+                    break;
+                case 0x4002:               // TopRows kombinaci
+                case 22290:                // SubRows kombinace
+                    foreach (int planUnitC in LisovnaUnits)
+                        elements.AddRange(_ReadALLElementsWorkUnit(rowGID, planUnitC, false, false));
+                    break;
+            }
+            return elements;
+        }
+
+
+        private List<IDataElement> _ReadALLElementsWorkUnit(GID Row, int planUnitC, bool hasFixedTask, bool hasCreateLevel)
+        {
+            List<IDataElement> Elements = new List<IDataElement>();                       
+            CapacityUnitCls unit;                       //KPJ
+            List<CapacityLevelItemCls> levelList;       //stavy kapacit v danem obdobi pro danou KPJ
+            PlanningVisualDataElementCls element;
+            WorkUnitCls workUnit;
+            MaterialPlanAxisItemCls axis;
+
+            PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
+            levelList = unit.GetCurrentCapacityLevels();
+            foreach (CapacityLevelItemCls level in levelList)
+            {
+                if (hasCreateLevel)
+                {
+                    //jeden stav kapacit jedne KPJ
+                    element = _GetElementLevel(Row, level);
+                    Elements.Add(element);
+                }
+
+                //všechny kapacitní úkoly vsech pracovnich linek jednoho stavu kapacit jedne KPJ
+                foreach (CapacityDeskCls desk in level.CapacityDesk)        //pres vsechny pracovni linky jednoho stavu kapacit
+                {
+                    foreach (CapacityJobItemCls job in desk.JobList)        //pres vsechny ukoly jedne pracovni linky
+                    {
+                        workUnit = (WorkUnitCls)job.WorkUnit;
+                        if (workUnit.IsFixedTask == hasFixedTask)
+                        {
+                            PressFactCombinDataCls c = null;
+
+                            axis = PlanningProcess.AxisHeap.FindAxisSItem(job.AxisID);
+                            switch (Row.ClassNumber)
+                            {
+                                case 0x4001:    //vsechny KPJ dohromady
+                                    c = new PressFactCombinDataCls();
+                                    break;
+                                case PlanUnitCCls.ClassNr:    //jednotlive KPJ
+                                    if (Row.RecordNumber == workUnit.CapacityUnit)
+                                        c = new PressFactCombinDataCls();
+                                    break;
+                                case 0x4002:    //hlavicka kombinaci
+                                    c = CombinData.Find(
+                                        delegate(PressFactCombinDataCls combin)
+                                        {
+                                            return (combin.CisloSubjektu == Row.RecordNumber
+                                                && combin.ConstrElementItem == axis.ConstrElement);
+                                        }
+                                    );
+                                    break;
+                                case 22290:     //polozky kombinaci
+                                    c = CombinData.Find(
+                                        delegate(PressFactCombinDataCls combin)
+                                        {
+                                            return (combin.CisloObjektu == Row.RecordNumber
+                                                && combin.ConstrElementItem == axis.ConstrElement);
+                                        }
+                                    );
+                                    break;
+                            }
+                            if (c != null)
+                            {
+                                element = GetElementsWorkUnit(Row, workUnit);
+                                Elements.Add(element);
+                            }
+                        }
+                    }
+                }
+            }
+            return Elements;
+        }
+
+
         private void _ReadElementsWorkUnit(DataSourceRequestReadElements request, int planUnitC, bool hasFixedTask, bool hasCreateLevel)
         {
             CapacityUnitCls unit;                       //KPJ
@@ -766,7 +847,7 @@ namespace Noris.Schedule.Extender
             PlanningVisualDataElementCls element;
             WorkUnitCls workUnit;
             MaterialPlanAxisItemCls axis;
-
+            
             PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
             levelList = unit.GetCapacityLevels(request.RequestedTimeRange);  //vsechny stavy kapacit jedne KPJ v danem obdobi
             foreach (CapacityLevelItemCls level in levelList)
@@ -845,6 +926,23 @@ namespace Noris.Schedule.Extender
             return result;
         }
 
+        private PlanningVisualDataElementCls _GetElementLevel(GID rowGID, CapacityLevelItemCls level)
+        {
+            PlanningVisualDataElementCls result;
+            GID elementGID, workGID;
+            TimeRange timeRange;
+
+            elementGID = new GID(1365, level.LevelID);
+           // rowGID = request.RequestRowGId;
+            workGID = GID.Empty;
+            timeRange = level.Time;
+            result = new PlanningVisualDataElementCls(elementGID, rowGID, 0, workGID, level.Time);
+            result.SuffixKeyForToolTip = ToolTipSuffix;
+            result.SetElementProperty(GraphElementLayerType.SubLayer, DataElementEditingMode.FixedLinkItemsOnSameThread, GraphElementVisualType.Type1);
+
+            return result;
+        }
+
         public static PlanningVisualDataElementCls GetElementsWorkUnit(GID rowGID, WorkUnitCls workUnit)
         {
             PlanningVisualDataElementCls result;
@@ -855,20 +953,9 @@ namespace Noris.Schedule.Extender
             elementGID = new GID(Planning.ProcessData.Constants.ClassNumberWork, workUnit.WorkID);
             workGID = new GID(Planning.ProcessData.Constants.ClassNumberTask, workUnit.TaskID);
             timeRange = workUnit.WorkTime;            
-            //int tridaToolTip = 0;
+           
             
-            //// tady definuji tridy tooltipu
-            //switch (rowGID.ClassNumber)
-            //{ 
-            //    case 0x4002: // hlavicka kombinaci
-            //    case 22290: // polozky kombinaci
-            //        tridaToolTip = 1817;   //
-            //        break;
-               
-               
-            //}
-            
-            result = new PlanningVisualDataElementCls(elementGID, rowGID, 1817, workGID, timeRange);
+            result = new PlanningVisualDataElementCls(elementGID, rowGID, 1817, workGID, timeRange);            
             result.SuffixKeyForToolTip = ToolTipSuffix;
             editMode = DataElementEditingMode.Movable;
             result.UseRatio = (float)workUnit.UseRatio;
