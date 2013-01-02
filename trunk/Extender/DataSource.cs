@@ -405,7 +405,9 @@ namespace Noris.Schedule.Extender
                         _ReadRows(request);
                         break;
                     case DataSourceRequestType.ElementsRead:
-                        _ReadElements(request);
+
+                        DataSourceRequestReadElements requestElements = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(request);
+                        requestElements.ResultElements.AddRange(_ReadElements(requestElements.RequestRowGId, requestElements.RequestedTimeRange));                      
                         break;
                     case DataSourceRequestType.FindInterGraphTargetData:
                         _FindInterGraphTargetData(request);
@@ -566,10 +568,8 @@ namespace Noris.Schedule.Extender
         #region ReadRows
         bool start = true;
         private void _ReadRows(DataSourceRequest requestInput)
-        {
-            DataSourceRequestReadRows request;
-            
-            request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadRows>(requestInput);
+        {                        
+            DataSourceRequestReadRows request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadRows>(requestInput);
             switch (request.RequestRowGId.ClassNumber)
             {
                 case PlanUnitCCls.ClassNr:  // kapacitni jednotky (horni graf)
@@ -585,7 +585,9 @@ namespace Noris.Schedule.Extender
         /// </summary>
         /// <param name="request"></param>
         private void _ReadRowsKPJ(DataSourceRequestReadRows request)
-        {                        
+        {
+
+            this.LisovnaUnits = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key).Select(item => item.PlanUnitC).ToList<int>(); /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/     
             PlanningVisualDataRowCls planningRow;                                
             // První řádek - společný pro všechny lisy
             GID rowGID = new GID(0x4001, 1); //třída = 0x4001, běžně se v databázích nepoužívá
@@ -593,17 +595,19 @@ namespace Noris.Schedule.Extender
             planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, "LISY", Lisovna.Value, false, String.Empty);
             planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;// nastavim vlastnost graficke vrstvy radku, abzc pri poklepani se cely radek zazoomoval na vsechny 
             request.ResultItems.Add(planningRow);
+            planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
+            planningRow.AllElementsLoaded = true;  
                         
             // vrati cisla kapacitch planovacich jednotek(konkretnich lisu), ktere jsou navazany na konkretni lisovnu 
-            LisovnaUnits = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key).Select(item=> item.PlanUnitC).ToList<int>() ; /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/                        
+                             
             // ze vsech kapacitnich jednotek vyberu jen ty, ktere patri do Lisovny a vytvorim pro ne radky do grafu        
             foreach (var unit in PlanningProcess.DataCapacityUnit.Values.Where(item => LisovnaUnits.Contains(item.PlanUnitData.RecordNumber)))
             {
                 planningRow = new PlanningVisualDataRowCls(unit.PlanUnitData.GId, request.RequestedGraphMode, unit.PlanUnitData.Reference, _GetName(unit.PlanUnitC), false, String.Empty);
                 request.ResultItems.Add(planningRow);
                 planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
-                planningRow.ElementList = _ReadALLElements(planningRow.GId);
-               // planningRow.AllElementsLoaded = true;                         
+                planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
+                planningRow.AllElementsLoaded = true;                         
             }                          
         }
 
@@ -651,7 +655,7 @@ namespace Noris.Schedule.Extender
                         planningRow.ParentGId = request.RequestRowGId; 
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
-                        planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                        planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
                         planningRow.AllElementsLoaded = true;
                     }
                 }
@@ -667,7 +671,7 @@ namespace Noris.Schedule.Extender
                             planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
                             planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;                           
                             lastCisloSubjektu = combin.CisloSubjektu;
-                            planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                            planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
                             planningRow.AllElementsLoaded = true;
                             request.ResultItems.Add(planningRow);
                         }
@@ -679,7 +683,7 @@ namespace Noris.Schedule.Extender
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
                         // nactu vsechny elementy do grafickeho radku
-                        planningRow.ElementList = _ReadALLElements(planningRow.GId);
+                        planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
                         planningRow.AllElementsLoaded = true;
                     }
                 }
@@ -719,56 +723,56 @@ namespace Noris.Schedule.Extender
         #endregion
 
         #region ReadElements
-        /// <summary>
-        /// Nacte do grafu graficke elementy Kapacitnich jednotek,kombinaci...
-        /// </summary>
-        /// <param name="requestInput"></param>
-        private void _ReadElements(DataSourceRequest requestInput)
-		{
-            DataSourceRequestReadElements request;
+        ///// <summary>
+        ///// Nacte do grafu graficke elementy Kapacitnich jednotek,kombinaci...
+        ///// </summary>
+        ///// <param name="requestInput"></param>
+        //private void _ReadElements(DataSourceRequest requestInput)
+        //{
+        //    DataSourceRequestReadElements request;
             
-            request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(requestInput);
-            switch (request.RequestRowGId.ClassNumber)
-			{
-				case 0x4001:              // Řádek "společný za více KPJ"
-                    foreach (int planUnitC in LisovnaUnits)
-                        _ReadElementsWorkUnit(request, planUnitC, false, false);
-                    break;
-                case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
-                    _ReadElementsWorkUnit(request, request.RequestRowGId.RecordNumber, true, true);
-                    break;
-                case 0x4002:               // TopRows kombinaci
-                case 22290:                // SubRows kombinace
-                    foreach (int planUnitC in LisovnaUnits)
-                        _ReadElementsWorkUnit(request, planUnitC, false, false);
-                    break;
-            }
-		}
+        //    request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(requestInput);
+        //    switch (request.RequestRowGId.ClassNumber)
+        //    {
+        //        case 0x4001:              // Řádek "společný za více KPJ"
+        //            foreach (int planUnitC in LisovnaUnits)
+        //                _ReadElementsWorkUnit(request, planUnitC, false, false);
+        //            break;
+        //        case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
+        //            _ReadElementsWorkUnit(request, request.RequestRowGId.RecordNumber, true, true);
+        //            break;
+        //        case 0x4002:               // TopRows kombinaci
+        //        case 22290:                // SubRows kombinace
+        //            foreach (int planUnitC in LisovnaUnits)
+        //                _ReadElementsWorkUnit(request, planUnitC, false, false);
+        //            break;
+        //    }
+        //}
 
 
-        private List<IDataElement> _ReadALLElements(GID rowGID)
+        private List<IDataElement> _ReadElements(GID rowGID,TimeRange interval)
         {
             List<IDataElement> elements = new List<IDataElement>();
             switch (rowGID.ClassNumber)
             {
                 case 0x4001:              // Řádek "společný za více KPJ"
                     foreach (int planUnitC in LisovnaUnits)
-                         elements.AddRange(_ReadALLElementsWorkUnit(rowGID, planUnitC, false, false));
+                         elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false,interval));
                     break;
                 case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
-                   elements.AddRange(_ReadALLElementsWorkUnit(rowGID, rowGID.RecordNumber, true, true));
+                    elements.AddRange(_ReadElementsWorkUnit(rowGID, rowGID.RecordNumber, true, true, interval));
                     break;
-                case 0x4002:               // TopRows kombinaci
+                case 0x4002:               // Parent Row kombinaci / redek ze vsechny polozky kombinace
                 case 22290:                // SubRows kombinace
                     foreach (int planUnitC in LisovnaUnits)
-                        elements.AddRange(_ReadALLElementsWorkUnit(rowGID, planUnitC, false, false));
+                        elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false, interval)); // budu zobrazovat pouze NEFIXOVANE stavy kapacit
                     break;
             }
             return elements;
         }
 
 
-        private List<IDataElement> _ReadALLElementsWorkUnit(GID Row, int planUnitC, bool hasFixedTask, bool hasCreateLevel)
+        private List<IDataElement> _ReadElementsWorkUnit(GID Row, int planUnitC, bool hasFixedTask, bool hasCreateLevel,TimeRange interval)
         {
             List<IDataElement> Elements = new List<IDataElement>();                       
             CapacityUnitCls unit;                       //KPJ
@@ -778,7 +782,10 @@ namespace Noris.Schedule.Extender
             MaterialPlanAxisItemCls axis;
 
             PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
-            levelList = unit.GetCurrentCapacityLevels();
+            if (interval == TimeRange.Empty)
+                levelList = unit.GetCurrentCapacityLevels();
+            else
+                levelList = unit.GetCapacityLevels(interval);
             foreach (CapacityLevelItemCls level in levelList)
             {
                 if (hasCreateLevel)
@@ -840,74 +847,74 @@ namespace Noris.Schedule.Extender
         }
 
 
-        private void _ReadElementsWorkUnit(DataSourceRequestReadElements request, int planUnitC, bool hasFixedTask, bool hasCreateLevel)
-        {
-            CapacityUnitCls unit;                       //KPJ
-            List<CapacityLevelItemCls> levelList;       //stavy kapacit v danem obdobi pro danou KPJ
-            PlanningVisualDataElementCls element;
-            WorkUnitCls workUnit;
-            MaterialPlanAxisItemCls axis;
+        //private void _ReadElementsWorkUnit(DataSourceRequestReadElements request, int planUnitC, bool hasFixedTask, bool hasCreateLevel)
+        //{
+        //    CapacityUnitCls unit;                       //KPJ
+        //    List<CapacityLevelItemCls> levelList;       //stavy kapacit v danem obdobi pro danou KPJ
+        //    PlanningVisualDataElementCls element;
+        //    WorkUnitCls workUnit;
+        //    MaterialPlanAxisItemCls axis;
             
-            PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
-            levelList = unit.GetCapacityLevels(request.RequestedTimeRange);  //vsechny stavy kapacit jedne KPJ v danem obdobi
-            foreach (CapacityLevelItemCls level in levelList)
-            {
-                if (hasCreateLevel)
-                {
-                    //jeden stav kapacit jedne KPJ
-                    element = _GetElementLevel(request, level);                         
-                    request.ResultElements.Add(element);
-                }
+        //    PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
+        //    levelList = unit.GetCapacityLevels(request.RequestedTimeRange);  //vsechny stavy kapacit jedne KPJ v danem obdobi
+        //    foreach (CapacityLevelItemCls level in levelList)
+        //    {
+        //        if (hasCreateLevel)
+        //        {
+        //            //jeden stav kapacit jedne KPJ
+        //            element = _GetElementLevel(request, level);                         
+        //            request.ResultElements.Add(element);
+        //        }
 
-                //všechny kapacitní úkoly vsech pracovnich linek jednoho stavu kapacit jedne KPJ
-                foreach (CapacityDeskCls desk in level.CapacityDesk)        //pres vsechny pracovni linky jednoho stavu kapacit
-                {
-                    foreach (CapacityJobItemCls job in desk.JobList)        //pres vsechny ukoly jedne pracovni linky
-                    {
-                        workUnit = (WorkUnitCls)job.WorkUnit;
-                        if (workUnit.IsFixedTask == hasFixedTask)
-                        {
-                            PressFactCombinDataCls c = null;
+        //        //všechny kapacitní úkoly vsech pracovnich linek jednoho stavu kapacit jedne KPJ
+        //        foreach (CapacityDeskCls desk in level.CapacityDesk)        //pres vsechny pracovni linky jednoho stavu kapacit
+        //        {
+        //            foreach (CapacityJobItemCls job in desk.JobList)        //pres vsechny ukoly jedne pracovni linky
+        //            {
+        //                workUnit = (WorkUnitCls)job.WorkUnit;
+        //                if (workUnit.IsFixedTask == hasFixedTask)
+        //                {
+        //                    PressFactCombinDataCls c = null;
 
-                            axis = PlanningProcess.AxisHeap.FindAxisSItem(job.AxisID);
-                            switch (request.RequestRowGId.ClassNumber)
-                            {
-                                case 0x4001:    //vsechny KPJ dohromady
-                                    c = new PressFactCombinDataCls();
-                                    break;
-                                case PlanUnitCCls.ClassNr:    //jednotlive KPJ
-                                    if (request.RequestRowGId.RecordNumber == workUnit.CapacityUnit)
-                                        c = new PressFactCombinDataCls();
-                                    break;
-                                case 0x4002:    //hlavicka kombinaci
-                                    c = CombinData.Find(
-                                        delegate(PressFactCombinDataCls combin)
-                                        {
-                                            return (combin.CisloSubjektu == request.RequestRowGId.RecordNumber
-                                                && combin.ConstrElementItem == axis.ConstrElement);
-                                        }
-                                    );
-                                    break;
-                                case 22290:     //polozky kombinaci
-                                    c = CombinData.Find(
-                                        delegate(PressFactCombinDataCls combin)
-                                        {
-                                            return (combin.CisloObjektu == request.RequestRowGId.RecordNumber
-                                                && combin.ConstrElementItem == axis.ConstrElement);
-                                        }
-                                    );
-                                    break;
-                            }
-                            if (c != null)
-                            {
-                                element = GetElementsWorkUnit(request.RequestRowGId, workUnit);
-                                request.ResultElements.Add(element);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        //                    axis = PlanningProcess.AxisHeap.FindAxisSItem(job.AxisID);
+        //                    switch (request.RequestRowGId.ClassNumber)
+        //                    {
+        //                        case 0x4001:    //vsechny KPJ dohromady
+        //                            c = new PressFactCombinDataCls();
+        //                            break;
+        //                        case PlanUnitCCls.ClassNr:    //jednotlive KPJ
+        //                            if (request.RequestRowGId.RecordNumber == workUnit.CapacityUnit)
+        //                                c = new PressFactCombinDataCls();
+        //                            break;
+        //                        case 0x4002:    //hlavicka kombinaci
+        //                            c = CombinData.Find(
+        //                                delegate(PressFactCombinDataCls combin)
+        //                                {
+        //                                    return (combin.CisloSubjektu == request.RequestRowGId.RecordNumber
+        //                                        && combin.ConstrElementItem == axis.ConstrElement);
+        //                                }
+        //                            );
+        //                            break;
+        //                        case 22290:     //polozky kombinaci
+        //                            c = CombinData.Find(
+        //                                delegate(PressFactCombinDataCls combin)
+        //                                {
+        //                                    return (combin.CisloObjektu == request.RequestRowGId.RecordNumber
+        //                                        && combin.ConstrElementItem == axis.ConstrElement);
+        //                                }
+        //                            );
+        //                            break;
+        //                    }
+        //                    if (c != null)
+        //                    {
+        //                        element = GetElementsWorkUnit(request.RequestRowGId, workUnit);
+        //                        request.ResultElements.Add(element);
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
 
         private PlanningVisualDataElementCls _GetElementLevel(DataSourceRequestReadElements request, CapacityLevelItemCls level)
         {
