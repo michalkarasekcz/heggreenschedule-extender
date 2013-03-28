@@ -359,7 +359,7 @@ namespace Noris.Schedule.Extender
                             WorkUnitCls workUnit = data.PlanningProcess.PlanningData.FindWorkUnit(pom[0]); // pro prvni pointer naleznu pracovni jednotku (KPJ)
                             //WorkUnitCls workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(pom[0].Element.RecordNumber);    // vysledky planovaciho procesu = jednotka prace
                             CapacityPlanWorkItemCls workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workUnit.TaskID);      // pro kapacitni jednotku najdu prislusnou vyrobni operaci (ulohu)                           
-                            wip = new KeyValuePair<CapacityPlanWorkItemCls, decimal>(workItem, workItemParalel.Value);  // 
+                            wip = new KeyValuePair<CapacityPlanWorkItemCls, decimal>(workItem, ,.Value);  // 
                         }
                     }
                     // ve wip je vyrobni uloha, jiz upravena na pozdaovane mnozstvi ktere se ma zaplanovat
@@ -388,7 +388,8 @@ namespace Noris.Schedule.Extender
                     workUnits.Sort(_CompareWorkUnitBegin); // setridim pracovni(kapacitní) jednotky podle času 
                     PlanningInteractiveSplitAxisSArgs splitArgs = new PlanningInteractiveSplitAxisSArgs();
                     splitArgs.SplitItemSource = workUnits[0].Value.DataPointer;           // zapisu ukazatel na prvni pracovni jednotku patřící pod výrobní operaci, kterou chci rozdělit                                                           
-                    splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(mnozstvi_zaplanovat, TimeRange.TimeDirection.ToFuture,true,1));
+                    //splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(mnozstvi_zaplanovat, TimeRange.TimeDirection.ToFuture,true,1));
+                    splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(mnozstvi_zaplanovat, TimeRange.TimeDirection.ToFuture, SplitAxisSQtyAdjustmentMode.None, 1));
                     decimal zbytek = Math.Max(0, workItemParalel.Key.QtyRequired - mnozstvi_zaplanovat);
                     if (zbytek > 0)
                         splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(zbytek, TimeRange.TimeDirection.ToFuture, true, 0));
