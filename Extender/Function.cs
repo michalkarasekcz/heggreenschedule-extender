@@ -359,7 +359,7 @@ namespace Noris.Schedule.Extender
                             WorkUnitCls workUnit = data.PlanningProcess.PlanningData.FindWorkUnit(pom[0]); // pro prvni pointer naleznu pracovni jednotku (KPJ)
                             //WorkUnitCls workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(pom[0].Element.RecordNumber);    // vysledky planovaciho procesu = jednotka prace
                             CapacityPlanWorkItemCls workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workUnit.TaskID);      // pro kapacitni jednotku najdu prislusnou vyrobni operaci (ulohu)                           
-                            wip = new KeyValuePair<CapacityPlanWorkItemCls, decimal>(workItem, ,.Value);  // 
+                            wip = new KeyValuePair<CapacityPlanWorkItemCls, decimal>(workItem, workItemParalel.Value);  // 
                         }
                     }
                     // ve wip je vyrobni uloha, jiz upravena na pozdaovane mnozstvi ktere se ma zaplanovat
