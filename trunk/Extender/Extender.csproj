@@ -97,6 +97,16 @@
   <ItemGroup>
     <Content Include="branch_element.ico" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Planning\Planning.csproj">
+      <Project>{01A98716-B282-4750-B523-25CC523D461D}</Project>
+      <Name>Planning</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Support\Support.csproj">
+      <Project>{22E35E70-F3F1-4D78-B3D8-8B6266B5F320}</Project>
+      <Name>Support</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
