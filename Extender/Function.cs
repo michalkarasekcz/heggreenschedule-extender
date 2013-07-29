@@ -1,15 +1,13 @@
-﻿#define XMLComunicator
+﻿//#define XMLComunicator
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
-
+using Noris.Schedule.Planning.DataFace;
+using Noris.Schedule.Planning.ProcessData;
 using Noris.Schedule.Support;
 using Noris.Schedule.Support.Services;
-using Noris.Schedule.Planning.ProcessData;
-using Noris.Schedule.Planning.DataFace;
-
 using Noris.WS.ServiceGate;
 
 #if XMLComunicator
@@ -693,71 +691,39 @@ namespace Noris.Schedule.Extender
 
         private bool _RunNorisFunction(ExtenderDataSource data, int dataFunctionClassNumber, string dataFunctionName, int recordNumbersClassNumber, List<int> recordNumbers)
         {
-            bool result;
-            // XmlConnector xc;
-            RunFunctionRequest request;
-            RunFunctionResponse response = null;
-            string mess;
-
-#if XMLComunicator
-            string output;
-            XmlConnector xc = new XmlConnector(ExtenderDataSource.ConnParam.ActiveUrl, "", "", "", ExtenderDataSource.ConnParam.ActiveUrl, ExtenderDataSource.ConnParam.SessionToken);
-            request = new RunFunctionRequest();
-            request.Function = new FunctionIdentification(dataFunctionClassNumber, dataFunctionName);
-            request.Records.AddRange(recordNumbersClassNumber, recordNumbers);
-            output = xc.ProcessXml(request.RawXml);
-            response = (RunFunctionResponse)RunFunctionResponse.GetFromXml(output);
-#else
-
-            bool direct = false;
+            bool result = false;                                                    
             try
-            {
-                if (direct)                
-                    Steward.ServiceGateAdapter.RunFunction(recordNumbersClassNumber, dataFunctionName, recordNumbers);                                    
-                else
+            {              
+                if (Steward.HaveCurrentUserPassword())
                 {
-                    //ServiceGateConnector connect = ServiceGateConnector.Create(ExtenderDataSource.ConnParam.ActiveUrl);
-                    //LogOnInfo logInfo = new LogOnInfo("", "", "");
-                    ServiceGateConnector connect = ServiceGateConnector.Create(ExtenderDataSource.ConnParam.ActiveUrl);
-                    string dbProfile = Steward.Connect.ProfileName;
-                    string userName = Steward.CurrentUser.Login;
-                    string password = Steward.NorisPasswordDecrypt("31dabf28f87a91ad41923fb1e761fcd32fa33a07c6d5692fd021b48043bedbead8ff88be38cce9ff253c648756d3adaafc062f27840227a4c7a9f5df5dc8dfaeecad7ae58b3a374cc6a8f632816fe48ce0be28835c066da14cc702a6d794f8cb04ba4d5e84295aa245fe47c7d85c7f7e211480fd687a484cc572f22427f7817d");
-                    LogOnInfo logInfo = new LogOnInfo("", "", "");
-
-
-                    using (var los = new LogOnScope(connect,logInfo))
+                    string mess; 
+                    RunFunctionResponse response = null;
+                    using (Noris.Clients.ServiceGate.LogOnScope logon = Steward.ServiceGateAdapter.LogonScope())
                     {
-                        request = new RunFunctionRequest();
+                        RunFunctionRequest request = new RunFunctionRequest();
                         request.Function = new FunctionIdentification(dataFunctionClassNumber, dataFunctionName);
                         request.Records.AddRange(recordNumbersClassNumber, recordNumbers);
-                        response = (RunFunctionResponse)los.Connector.ProcessRequest(request);
+                        response = (RunFunctionResponse)logon.Connector.ProcessRequest(request);
                     }
-
-                }
-                result = true;
+                    if (response.Auditlog == null)
+                        // mess = output;
+                        mess = response.RawXml;
+                    else
+                    {
+                        mess = String.Empty;
+                        if (response.Auditlog.Entries != null)
+                            foreach (AuditlogEntry entry in response.Auditlog.Entries)
+                                mess += entry.Message + "\r\n";
+                    }
+                    if (!string.IsNullOrEmpty(mess))
+                        MessageBox.Show(mess);
+                    result = (response.Auditlog.State != AuditlogState.Failure);                   
+                }               
             }
             catch
             {
                 result = false;
-            }
-
-#endif
-
-
-            if (response.Auditlog == null)
-                // mess = output;
-                mess = response.RawXml;
-            else
-            {
-                mess = String.Empty;
-                if (response.Auditlog.Entries != null)
-                    foreach (AuditlogEntry entry in response.Auditlog.Entries)
-                        mess += entry.Message + "\r\n";
-            }
-            if (!string.IsNullOrEmpty(mess))
-                MessageBox.Show(mess);
-            result = (response.Auditlog.State != AuditlogState.Failure);
-
+            }          
             return result;
         }
     }
