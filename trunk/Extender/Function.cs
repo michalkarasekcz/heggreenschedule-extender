@@ -693,20 +693,13 @@ namespace Noris.Schedule.Extender
         {
             bool result = false;                                                    
             try
-            {              
+            {
                 if (Steward.HaveCurrentUserPassword())
                 {
-                    string mess; 
-                    RunFunctionResponse response = null;
-                    using (Noris.Clients.ServiceGate.LogOnScope logon = Steward.ServiceGateAdapter.LogonScope())
-                    {
-                        RunFunctionRequest request = new RunFunctionRequest();
-                        request.Function = new FunctionIdentification(dataFunctionClassNumber, dataFunctionName);
-                        request.Records.AddRange(recordNumbersClassNumber, recordNumbers);
-                        response = (RunFunctionResponse)logon.Connector.ProcessRequest(request);
-                    }
+
+                    string mess;
+                    Noris.WS.ServiceGate.RunFunctionResponse response = Steward.ServiceGateAdapter.RunFunction(dataFunctionClassNumber, dataFunctionName, recordNumbers);
                     if (response.Auditlog == null)
-                        // mess = output;
                         mess = response.RawXml;
                     else
                     {
@@ -717,11 +710,12 @@ namespace Noris.Schedule.Extender
                     }
                     if (!string.IsNullOrEmpty(mess))
                         MessageBox.Show(mess);
-                    result = (response.Auditlog.State != AuditlogState.Failure);                   
+                    result = (response.Auditlog.State != AuditlogState.Failure);
                 }               
             }
-            catch
+            catch(Exception ex)
             {
+                MessageBox.Show(ex.Message);
                 result = false;
             }          
             return result;
