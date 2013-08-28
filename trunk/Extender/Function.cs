@@ -381,12 +381,12 @@ namespace Noris.Schedule.Extender
             List<KeyValuePair<int, WorkUnitCls>> workUnits = _GetWorkUnits(workItemParalel.Key); // pro vyrobni operaci dohledam pracovni jednotky (KPJ)
             if (workUnits.Count > 0) // Vyrobni operace ma pracovni jednotky (KPJ) ??
             {
+                var workplaces = workUnits.Where(item => item.Value.Category == CapacitySourceCategory.Workplace); // ze vsech kapacit dohledam kapacitni jednotky typu pracoviste
                 if (workItemParalel.Key.QtyRequired != mnozstvi_zaplanovat)  // zadané množství je jiné než na výrobní operaci parlelního pruchodu, rozdelim tedy materiálovou osu na dilci casti s definovaným množstvím
                 {                                                          
-                    workUnits.Sort(_CompareWorkUnitBegin); // setridim pracovni(kapacitní) jednotky podle času 
+                   // workUnits.Sort(_CompareWorkUnitBegin); // setridim pracovni(kapacitní) jednotky podle času 
                     PlanningInteractiveSplitAxisSArgs splitArgs = new PlanningInteractiveSplitAxisSArgs();
-                    splitArgs.SplitItemSource = workUnits[0].Value.DataPointer;           // zapisu ukazatel na prvni pracovni jednotku patřící pod výrobní operaci, kterou chci rozdělit                                                           
-                    //splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(mnozstvi_zaplanovat, TimeRange.TimeDirection.ToFuture,true,1));
+                    splitArgs.SplitItemSource = workplaces.OrderBy(p => p.Value.WorkTime.Begin).FirstOrDefault().Value.DataPointer;// pracoviste setridim podle casu zacatku a vezmu prvni nejblizsi
                     splitArgs.SplitItemList.Add(new PlanningInteractiveSplitAxisSItemArgs(mnozstvi_zaplanovat, TimeRange.TimeDirection.ToFuture, SplitAxisSQtyAdjustmentMode.None, 1));
                     decimal zbytek = Math.Max(0, workItemParalel.Key.QtyRequired - mnozstvi_zaplanovat);
                     if (zbytek > 0)
@@ -400,7 +400,7 @@ namespace Noris.Schedule.Extender
                         result.AddRange(si.ResultElementPointerList);                                   
                 }
                 else
-                    result.Add(workUnits[0].Value.DataPointer); // mnozstvi na vzrobni operaci je stejne , vraci se pointer na prvni kapacitni jednotku
+                    result.Add(workplaces.FirstOrDefault().Value.DataPointer); // mnozstvi na vzrobni operaci je stejne , vraci se pointer na prvni kapacitni jednotku
             }
             return result;
         }
@@ -426,20 +426,14 @@ namespace Noris.Schedule.Extender
              */
             List<KeyValuePair<int, WorkUnitCls>> workUnits = _GetWorkUnits(workItemParalel.Key); // pro vyrobni operaci vartim vsechny KPJ
             if (workUnits.Count > 0)
-            {
-                //decimal qtyTaskCurrent = ;         // celkove mnozstvi, ktere se ma na teto vyrobni operaci vyrobit
-                workUnits.Sort(_CompareWorkUnitBegin);
-                PlanningInteractiveSplitTaskCArgs splitTaskArgs = new PlanningInteractiveSplitTaskCArgs();
-                splitTaskArgs.SplitItemSource = workUnits[0].Value.DataPointer; // podle prvni kapacitni jednotky definuju, ktery pruchod se bude delit
-
-
-
+            {                              
+                PlanningInteractiveSplitTaskCArgs splitTaskArgs = new PlanningInteractiveSplitTaskCArgs();              
+                splitTaskArgs.SplitItemSource = workUnits.Where(item => item.Value.Category == CapacitySourceCategory.Workplace).OrderBy(item => item.Value.WorkTime.Begin).FirstOrDefault().Value.DataPointer;
                 // budu pridavat jednotive paralelni pruchody
                 bool PridanaVyrovnanvaciPolozka = false;
                 int i;
                 for (i = 1; i <= workItemParalel.Value; i++)  // pro kazdý paralelní průchod pridam podilovou polozku 
-                {
-                    // decimal qtySplitSum = splitTaskArgs.SplitItemList.Sum(item => item.QtyRequired);   // Součet množství ze všech požadavků na dílcí paralelní průchody
+                {                    
                     if (workItemParalel.Key.QtyRequired >= (splitTaskArgs.QtyRequiredSum + qty)) // kontrola na pocet mnozstvi, nesmim zadat mnozstvi vyssi nez je celkove mnozstvi na vyrobni operaci
                     {
                         // kdyz pridam polozku, mnozstvi je mensi nez celkove
