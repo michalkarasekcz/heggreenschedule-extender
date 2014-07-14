@@ -19,6 +19,8 @@ namespace Noris.Schedule.Extender
 {
     public class PlanCombin : IFunctionMenuItem
     {
+        int d;
+
         bool IFunctionMenuItem.IsFunctionSuitableFor(FunctionMenuItemSuitableArgs args)
         {
             bool result;
