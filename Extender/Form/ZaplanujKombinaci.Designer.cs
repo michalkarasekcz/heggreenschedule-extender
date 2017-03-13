@@ -34,8 +34,10 @@
             this.stornoBtn = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
-            this.workplaceCbx = new System.Windows.Forms.ComboBox();
+            this.alternativeWorkplaceCbx = new System.Windows.Forms.ComboBox();
             this.startTimeDtp = new System.Windows.Forms.DateTimePicker();
+            this.label3 = new System.Windows.Forms.Label();
+            this.baseWorkplaceCbx = new System.Windows.Forms.ComboBox();
             this.SuspendLayout();
             // 
             // lqtyLbl
@@ -72,7 +74,7 @@
             this.stornoBtn.TabIndex = 3;
             this.stornoBtn.Text = "Storno";
             this.stornoBtn.UseVisualStyleBackColor = true;
-            this.stornoBtn.Click += new System.EventHandler(this._Novalidate);
+            this.stornoBtn.Click += new System.EventHandler(this._NoValidate);
             // 
             // label1
             // 
@@ -86,20 +88,20 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(25, 85);
+            this.label2.Location = new System.Drawing.Point(25, 116);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(60, 13);
+            this.label2.Size = new System.Drawing.Size(116, 13);
             this.label2.TabIndex = 6;
-            this.label2.Text = "Pracoviště:";
+            this.label2.Text = "Alternativní pracoviště:";
             // 
-            // workplaceCbx
+            // alternativeWorkplaceCbx
             // 
-            this.workplaceCbx.FormattingEnabled = true;
-            this.workplaceCbx.Location = new System.Drawing.Point(191, 82);
-            this.workplaceCbx.Name = "workplaceCbx";
-            this.workplaceCbx.Size = new System.Drawing.Size(286, 21);
-            this.workplaceCbx.TabIndex = 8;
-            this.workplaceCbx.SelectedIndexChanged += new System.EventHandler(this._FillStartTime);
+            this.alternativeWorkplaceCbx.FormattingEnabled = true;
+            this.alternativeWorkplaceCbx.Location = new System.Drawing.Point(191, 113);
+            this.alternativeWorkplaceCbx.Name = "alternativeWorkplaceCbx";
+            this.alternativeWorkplaceCbx.Size = new System.Drawing.Size(286, 21);
+            this.alternativeWorkplaceCbx.TabIndex = 8;
+            this.alternativeWorkplaceCbx.SelectedIndexChanged += new System.EventHandler(this._FillStartTime);
             // 
             // startTimeDtp
             // 
@@ -112,14 +114,33 @@
             this.startTimeDtp.TabIndex = 9;
             this.startTimeDtp.Value = new System.DateTime(2010, 12, 29, 8, 30, 0, 0);
             // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(25, 84);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(105, 13);
+            this.label3.TabIndex = 10;
+            this.label3.Text = "Základní pracoviště:";
+            // 
+            // baseWorkplaceCbx
+            // 
+            this.baseWorkplaceCbx.FormattingEnabled = true;
+            this.baseWorkplaceCbx.Location = new System.Drawing.Point(191, 81);
+            this.baseWorkplaceCbx.Name = "baseWorkplaceCbx";
+            this.baseWorkplaceCbx.Size = new System.Drawing.Size(286, 21);
+            this.baseWorkplaceCbx.TabIndex = 13;
+            // 
             // ZaplanujKombinaci
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(522, 190);
             this.ControlBox = false;
+            this.Controls.Add(this.baseWorkplaceCbx);
+            this.Controls.Add(this.label3);
             this.Controls.Add(this.startTimeDtp);
-            this.Controls.Add(this.workplaceCbx);
+            this.Controls.Add(this.alternativeWorkplaceCbx);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.stornoBtn);
@@ -146,7 +167,9 @@
         private System.Windows.Forms.Button stornoBtn;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label label2;
-        private System.Windows.Forms.ComboBox workplaceCbx;
+        private System.Windows.Forms.ComboBox alternativeWorkplaceCbx;
         private System.Windows.Forms.DateTimePicker startTimeDtp;
+        private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.ComboBox baseWorkplaceCbx;
     }
 }

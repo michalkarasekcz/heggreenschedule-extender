@@ -21,10 +21,6 @@
     </UpgradeBackupLocation>
     <OldToolsVersion>3.5</OldToolsVersion>
     <TargetFrameworkProfile />
-    <SccProjectName>Svn</SccProjectName>
-    <SccLocalPath>Svn</SccLocalPath>
-    <SccAuxPath>Svn</SccAuxPath>
-    <SccProvider>SubversionScc</SccProvider>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -50,16 +46,13 @@
     </DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Lcs.Scheduler.Planning, Version=1.0.0.0, Culture=neutral, processorArchitecture=x86">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Lcs.Scheduler.Planning">
       <HintPath>..\bin\Lcs.Scheduler.Planning.dll</HintPath>
     </Reference>
-    <Reference Include="Lcs.Scheduler.Support, Version=1.0.0.0, Culture=neutral, processorArchitecture=x86">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Lcs.Scheduler.Support">
       <HintPath>..\bin\Lcs.Scheduler.Support.dll</HintPath>
     </Reference>
-    <Reference Include="Lcs.ServiceGateAdapter, Version=42.0.0.27957, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Lcs.ServiceGateAdapter">
       <HintPath>..\bin\Lcs.ServiceGateAdapter.dll</HintPath>
     </Reference>
     <Reference Include="System" />

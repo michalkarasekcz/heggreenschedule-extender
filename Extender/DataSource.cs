@@ -1,4 +1,7 @@
-﻿using System;
+﻿#define LOADONDEMAND
+//#define TEST
+
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
@@ -12,7 +15,7 @@ using Noris.Schedule.Support.Data;
 using Noris.Schedule.Support.Services;
 using Noris.Schedule.Support.Sql;
 
-//using XmlCommunicator;
+
 
 namespace Noris.Schedule.Extender
 {
@@ -80,14 +83,21 @@ namespace Noris.Schedule.Extender
         public string CEItemNazev { get { return _CEItemNazev; } set { _CEItemNazev = value; } }
         private string _CEItemNazev;
         /// <summary>
-        /// pracoviste z DV 22919 Pracoviste
+        /// Pracoviště z DV 23546 Základní pracoviště
         /// </summary>
-        public Dictionary<int, string> Workplaces { get { return _Workplaces; } set { _Workplaces = value; } }
-        public Dictionary<int, string> _Workplaces;
+        public Dictionary<int, string> BaseWorkplace { get { return _BaseWorkplace; } set { _BaseWorkplace = value; } }
+        public Dictionary<int, string> _BaseWorkplace;
+        /// <summary>
+        /// Pracoviště z DV 22919 Alternativní pracoviště
+        /// </summary>
+        public Dictionary<int, string> AlternativeWorkplaces { get { return _AlternativeWorkplaces; } set { _AlternativeWorkplaces = value; } }
+        public Dictionary<int, string> _AlternativeWorkplaces;
 
         public PressFactCombinDataCls()
         {
-            Workplaces = new Dictionary<int, string>();
+            BaseWorkplace = new Dictionary<int, string>();
+            AlternativeWorkplaces = new Dictionary<int, string>();
+            AlternativeWorkplaces.Add(0, string.Empty);
         }
        
         public static int CompareByReference(PressFactCombinDataCls a, PressFactCombinDataCls b)
@@ -395,34 +405,39 @@ namespace Noris.Schedule.Extender
         public void RunRequest(DataSourceRequest request)
 		{
             // touto metedou , ktera je soucasti interface IDatSource, tabule dava planovaci tabule datovemu zdroji pozadavek na nova data
-                switch (request.RequestType)
-                {
-                    case DataSourceRequestType.QueryAboutRequest:
-                        _QueryAboutRequest(request);
-                        break;
-                    case DataSourceRequestType.TopLevelRead:
-                    case DataSourceRequestType.SubRowsRead:
-                        _ReadRows(request);
-                        break;
-                    case DataSourceRequestType.ElementsRead:
-
-                        DataSourceRequestReadElements requestElements = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(request);
-                        requestElements.ResultElements.AddRange(_ReadElements(requestElements.RequestRowGId, requestElements.RequestedTimeRange));                      
-                        break;
-                    case DataSourceRequestType.FindInterGraphTargetData:
-                        _FindInterGraphTargetData(request);
-                        break;
-                    case DataSourceRequestType.CreateDataRelationNet:
-                        _CreateRelations(request);
-                        break;
-                    case DataSourceRequestType.RunDataFunction:
-                        _RunDataFunction(request);
-                        break;
-                }
+            switch (request.RequestType)
+            {
+                case DataSourceRequestType.QueryAboutRequest:
+                    _QueryAboutRequest(request);
+                    break;
+                case DataSourceRequestType.TopLevelRead:
+                case DataSourceRequestType.SubRowsRead:
+                    _ReadRows(request);
+                    break;
+                case DataSourceRequestType.ElementsRead:
+#if (LOADONDEMAND)
+                    DataSourceRequestReadElements requestElements = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(request);
+                    requestElements.ResultElements.AddRange(_ReadElements(requestElements.RequestRowGId, TimeRange.Empty));         // DAJ : požádám o načtení VŠECH elementů, bez ohledu na requestElements
+                    requestElements.ResultLoadAllElements = true;   // DAJ : víme, že jsme načetli VŠECHNY elementy:
+#else
+                    DataSourceRequestReadElements requestElements = DataSourceRequest.TryGetTypedRequest<DataSourceRequestReadElements>(request);
+                    requestElements.ResultElements.AddRange(_ReadElements(requestElements.RequestRowGId, requestElements.RequestedTimeRange));
+#endif
+                    break;
+                case DataSourceRequestType.FindInterGraphTargetData:
+                    _FindInterGraphTargetData(request);
+                    break;
+                case DataSourceRequestType.CreateDataRelationNet:
+                    _CreateRelations(request);
+                    break;
+                case DataSourceRequestType.RunDataFunction:
+                    _RunDataFunction(request);
+                    break;
+            }
            
         }
 
-        #region QueryAboutRequest
+#region QueryAboutRequest
         private void _QueryAboutRequest(DataSourceRequest requestInput)
         {
             DataSourceRequestQuery request;
@@ -430,6 +445,10 @@ namespace Noris.Schedule.Extender
             request = DataSourceRequest.TryGetTypedRequest<DataSourceRequestQuery>(requestInput);
             switch (request.QueryRequestType)
             {
+                case DataSourceRequestType.SubRowsRead:
+                case DataSourceRequestType.TopLevelRead:
+                    request.QueryResultRunTimeout = 40 * 60;
+                    break;
                 case DataSourceRequestType.ActivateDataVersion:
                     if (CombinData == null)
                     {
@@ -463,9 +482,9 @@ namespace Noris.Schedule.Extender
                     break;
             }
         }
-        #endregion
+#endregion
 
-        #region RunFunction
+#region RunFunction
         private void _RunDataFunction(DataSourceRequest requestInput)
         {
             DataSourceRequestDataFunction request;
@@ -485,9 +504,9 @@ namespace Noris.Schedule.Extender
                     break;
             }
         }
-        #endregion
+#endregion
 
-        #region PrepareData
+#region PrepareData
         private ConnParamStruct _PrepareConnParam()
         {
             ConnParamStruct result;
@@ -510,9 +529,9 @@ namespace Noris.Schedule.Extender
         {
             CombinData = new List<PressFactCombinDataCls>();
         }
-        #endregion
+#endregion
 
-        #region LoadData
+#region LoadData
         private void _LoadCombinData()
         {
             string sql;
@@ -521,17 +540,26 @@ namespace Noris.Schedule.Extender
 
             CombinData.Clear();
             sql = "select pfh.cislo_subjektu, pfh.reference_subjektu, pfh.nazev_subjektu,"
-                 + " vs.cislo_vztaz_subjektu workplace, w.reference_subjektu workplace_refer, w.nazev_subjektu workplace_nazev,"
-                 + " pfh.constr_element ce, subj_1.reference_subjektu ce_refer, subj_1.nazev_subjektu ce_nazev,"
-                 + " pfi.cislo_objektu,"
-                 + " pfi.constr_element ce_item, subj_2.reference_subjektu ce_item_refer, subj_2.nazev_subjektu ce_item_nazev"
-                 + " from lcs.press_fact_combin_header pfh"
-                 + " join lcs.press_fact_combin_item pfi on pfh.cislo_subjektu = pfi.cislo_subjektu"
-                 + " join lcs.subjekty subj_1 on pfh.constr_element = subj_1.cislo_subjektu"
-                 + " join lcs.subjekty subj_2 on pfi.constr_element = subj_2.cislo_subjektu"
-                 + " join lcs.vztahysubjektu vs on pfh.cislo_subjektu = vs.cislo_subjektu and vs.cislo_vztahu = 22919"
-                 + " join lcs.workplace w on vs.cislo_vztaz_subjektu = w.cislo_subjektu and w.parent_workplace = " + Lisovna.Key.ToString()
-                 + " order by pfh.cislo_subjektu, pfi.cislo_objektu";
+                + " vsb.cislo_vztaz_subjektu base_workplace, wb.reference_subjektu base_workplace_refer, wb.nazev_subjektu base_workplace_nazev,"
+                + " vs.cislo_vztaz_subjektu alternative_workplace, w.reference_subjektu alternative_workplace_refer, w.nazev_subjektu alternative_workplace_nazev,"
+                + " pfh.constr_element ce, subj_1.reference_subjektu ce_refer, subj_1.nazev_subjektu ce_nazev,"
+                + " pfi.cislo_objektu,"
+                + " pfi.constr_element ce_item, subj_2.reference_subjektu ce_item_refer, subj_2.nazev_subjektu ce_item_nazev"
+                + " from lcs.press_fact_combin_header pfh"
+                + " join lcs.press_fact_combin_item pfi on pfh.cislo_subjektu = pfi.cislo_subjektu"
+                + " join lcs.subjekty subj_1 on pfh.constr_element = subj_1.cislo_subjektu"
+                + " join lcs.subjekty subj_2 on pfi.constr_element = subj_2.cislo_subjektu"
+#if (TEST)
+                + " left outer join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
+                + " left outer join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
+#else
+                + " join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
+                + " join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
+#endif
+                + " left outer join lcs.vztahysubjektu vs on pfh.cislo_subjektu = vs.cislo_subjektu and vs.cislo_vztahu = 22919"
+                + " left outer join lcs.workplace w on vs.cislo_vztaz_subjektu = w.cislo_subjektu"
+                + " where pfh.valid_combin = 'A'"
+                + " order by pfh.cislo_subjektu, pfi.cislo_objektu";
             dt = Db_Layer.GetDataTable(sql);
 
             combin = new PressFactCombinDataCls();
@@ -554,18 +582,25 @@ namespace Noris.Schedule.Extender
                     combin.ConstrElementItem = Get<int>(row, "ce_item");
                     combin.CEItemRefer = Get<string>(row, "ce_item_refer");
                     combin.CEItemNazev = Get<string>(row, "ce_item_nazev");
-                    if (Get<int>(row, "workplace") > 0)
-                        combin.Workplaces.Add(Get<int>(row, "workplace"), Get<string>(row, "workplace_refer") + " - " + Get<string>(row, "workplace_nazev"));
+                    if (Get<int>(row, "base_workplace") > 0)
+                        combin.BaseWorkplace.Add(Get<int>(row, "base_workplace"), Get<string>(row, "base_workplace_refer") + " - " + Get<string>(row, "base_workplace_nazev"));
+                    if (Get<int>(row, "alternative_workplace") > 0)
+                        combin.AlternativeWorkplaces.Add(Get<int>(row, "alternative_workplace"), Get<string>(row, "alternative_workplace_refer") + " - " + Get<string>(row, "alternative_workplace_nazev"));
                 }
-                else // tady se radky namnozi kvili navazanemu pracovisti
-                    combin.Workplaces.Add(Get<int>(row, "workplace"), Get<string>(row, "workplace_refer") + " - " + Get<string>(row, "workplace_nazev"));
+                else // tady se radky namnozi kvuli navazanemu pracovisti
+                    combin.AlternativeWorkplaces.Add(Get<int>(row, "alternative_workplace"), Get<string>(row, "alternative_workplace_refer") + " - " + Get<string>(row, "alternative_workplace_nazev"));
             }
             if (combin.CisloObjektu > 0)
                 CombinData.Add(combin);
-        }
-        #endregion
 
-        #region ReadRows
+            using (var scope = Steward.TraceScopeBegin("Combin", "Load.Combin", Noris.Schedule.Planning.ProcessData.Constants.TraceKeyWordAplScheduler))
+            {
+                scope.User = new string[] { "Combin.Count = " + CombinData.Count.ToString() };
+            }
+        }
+#endregion
+
+#region ReadRows
         bool start = true;
         private void _ReadRows(DataSourceRequest requestInput)
         {                        
@@ -586,7 +621,6 @@ namespace Noris.Schedule.Extender
         /// <param name="request"></param>
         private void _ReadRowsKPJ(DataSourceRequestReadRows request)
         {
-
             this.LisovnaUnits = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key).Select(item => item.PlanUnitC).ToList<int>(); /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/     
             PlanningVisualDataRowCls planningRow;                                
             // První řádek - společný pro všechny lisy
@@ -595,20 +629,38 @@ namespace Noris.Schedule.Extender
             planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, "LISY", Lisovna.Value, false, String.Empty);
             planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;// nastavim vlastnost graficke vrstvy radku, abzc pri poklepani se cely radek zazoomoval na vsechny 
             request.ResultItems.Add(planningRow);
+
+#if (LOADONDEMAND)
+            // DAJ : pokud tyto dva řádky vynechám, budou se načítat elementy "OnDemand":
+            /*
             planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
             planningRow.AllElementsLoaded = true;  
-                        
+            */
+#else
+            planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
+            planningRow.AllElementsLoaded = true;
+#endif
+
             // vrati cisla kapacitch planovacich jednotek(konkretnich lisu), ktere jsou navazany na konkretni lisovnu 
-                             
+
             // ze vsech kapacitnich jednotek vyberu jen ty, ktere patri do Lisovny a vytvorim pro ne radky do grafu        
             foreach (var unit in PlanningProcess.DataCapacityUnit.Values.Where(item => LisovnaUnits.Contains(item.PlanUnitData.RecordNumber)))
             {
                 planningRow = new PlanningVisualDataRowCls(unit.PlanUnitData.GId, request.RequestedGraphMode, unit.PlanUnitData.Reference, _GetName(unit.PlanUnitC), false, String.Empty);
                 request.ResultItems.Add(planningRow);
                 planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+
+#if (LOADONDEMAND)
+                // DAJ : pokud tyto dva řádky vynechám, budou se načítat elementy "OnDemand":
+                /*
                 planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
                 planningRow.AllElementsLoaded = true;                         
-            }                          
+                */
+#else
+            planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
+            planningRow.AllElementsLoaded = true;
+#endif
+            }
         }
 
         private string _GetName(int unit)
@@ -655,8 +707,16 @@ namespace Noris.Schedule.Extender
                         planningRow.ParentGId = request.RequestRowGId; 
                         planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
                         request.ResultItems.Add(planningRow);
+#if (LOADONDEMAND)
+                        // DAJ : pokud tyto dva řádky vynechám, budou se načítat elementy "OnDemand":
+                        /*
                         planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
                         planningRow.AllElementsLoaded = true;
+                        */
+#else
+                        planningRow.ElementList = _ReadElements(planningRow.GId,TimeRange.Empty);
+                        planningRow.AllElementsLoaded = true;
+#endif
                     }
                 }
                 else // nactu vsechny zaznamy do grafu
@@ -665,6 +725,62 @@ namespace Noris.Schedule.Extender
                     CombinData.Sort(PressFactCombinDataCls.CompareByReference); // setridim vsechny polozky
                     foreach (PressFactCombinDataCls combin in CombinData)
                     {
+#if (LOADONDEMAND)
+                        try
+                        {
+                            if (combin.CisloSubjektu == 2929897 /*GV000040-0003*/)  // if (combin.CisloSubjektu == 2929893 /*GV000040-0002*/)
+                            { }
+                            if (combin.CisloSubjektu != lastCisloSubjektu) // nalezena nova kombinace
+                            {
+                                parentRowGID = new GID(0x4002, combin.CisloSubjektu);
+                                planningRow = new PlanningVisualDataRowCls(parentRowGID, RowGraphMode.TaskCapacityLink, combin.Reference, combin.Nazev, true, String.Empty);
+                                planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+                                lastCisloSubjektu = combin.CisloSubjektu;
+
+                                // DAJ : pokud tyto dva řádky vynechám, budou se načítat elementy "OnDemand":
+                                /*
+                                planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
+                                planningRow.AllElementsLoaded = true;
+                                 */
+                                request.ResultItems.Add(planningRow);
+                            }
+                            combin.ParentGID = parentRowGID;
+                            rowGID = new GID(22290, combin.CisloObjektu);
+                            combin.GID = rowGID;
+                            planningRow = new PlanningVisualDataRowCls(rowGID, RowGraphMode.TaskCapacityLink, combin.CEItemRefer, combin.CEItemNazev, false, String.Empty);
+                            planningRow.ParentGId = parentRowGID;
+                            planningRow.ActionOnDoubleClick = RowActionType.ZoomTimeToAllElements;
+                            request.ResultItems.Add(planningRow);
+                            // nactu vsechny elementy do grafickeho radku
+                            // DAJ : pokud tyto dva řádky vynechám, budou se načítat elementy "OnDemand":
+                            /*
+                            planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
+                            planningRow.AllElementsLoaded = true;
+                             */
+                        }
+                        catch (Exception exc)
+                        {   // Lokální nezávislý záznam chyby:
+                            try
+                            {
+                                string eol = Environment.NewLine;
+                                string txt = "";
+                                Exception ex = exc;
+                                string head = "Exception ";
+                                while (ex != null)
+                                {
+                                    Type typ = ex.GetType();
+                                    txt += head + typ.Namespace + "." + typ.Name + ": " + ex.Message + eol + ex.StackTrace + eol + "===============================================================" + eol;
+                                    ex = exc.InnerException;
+                                    head = "Inner exception ";
+                                }
+                                string time = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                                string file = @"C:\Users\Administrator\Desktop\LCS - DAJ\logy\SchedulerError-" + time + ".txt";
+                                System.IO.File.WriteAllText(file, txt, System.Text.Encoding.UTF8);
+                            }
+                            catch { }
+                            throw;
+                        }
+#else
                         if (combin.CisloSubjektu != lastCisloSubjektu) // nalezena nova kombinace
                         {
                             parentRowGID = new GID(0x4002, combin.CisloSubjektu);
@@ -685,6 +801,7 @@ namespace Noris.Schedule.Extender
                         // nactu vsechny elementy do grafickeho radku
                         planningRow.ElementList = _ReadElements(planningRow.GId, TimeRange.Empty);
                         planningRow.AllElementsLoaded = true;
+#endif
                     }
                 }
             }
@@ -720,9 +837,9 @@ namespace Noris.Schedule.Extender
             //    }
             //}
         }
-        #endregion
+#endregion
 
-        #region ReadElements
+#region ReadElements
         ///// <summary>
         ///// Nacte do grafu graficke elementy Kapacitnich jednotek,kombinaci...
         ///// </summary>
@@ -757,7 +874,7 @@ namespace Noris.Schedule.Extender
             {
                 case 0x4001:              // Řádek "společný za více KPJ"
                     foreach (int planUnitC in LisovnaUnits)
-                         elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false,interval));
+                        elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false, interval));
                     break;
                 case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
                     elements.AddRange(_ReadElementsWorkUnit(rowGID, rowGID.RecordNumber, true, true, interval));
@@ -772,14 +889,14 @@ namespace Noris.Schedule.Extender
         }
 
 
-        private List<IDataElement> _ReadElementsWorkUnit(GID Row, int planUnitC, bool hasFixedTask, bool hasCreateLevel,TimeRange interval)
+        private List<IDataElement> _ReadElementsWorkUnit(GID Row, int planUnitC, bool hasFixedTask, bool hasCreateLevel, TimeRange interval)
         {
-            List<IDataElement> Elements = new List<IDataElement>();                       
+            List<IDataElement> Elements = new List<IDataElement>();
             CapacityUnitCls unit;                       //KPJ
             List<CapacityLevelItemCls> levelList;       //stavy kapacit v danem obdobi pro danou KPJ
             PlanningVisualDataElementCls element;
             WorkUnitCls workUnit;
-            MaterialPlanAxisItemCls axis;
+            PlanItemAxisS axis;
 
             PlanningProcess.DataCapacityUnit.TryGetValue(planUnitC, out unit);
             if (interval == TimeRange.Empty)
@@ -796,8 +913,9 @@ namespace Noris.Schedule.Extender
                 }
 
                 //všechny kapacitní úkoly vsech pracovnich linek jednoho stavu kapacit jedne KPJ
-                foreach (CapacityDeskCls desk in level.CapacityDesk)        //pres vsechny pracovni linky jednoho stavu kapacit
+                foreach (CapacityDeskCls desk in level.DeskArrayAll)        //pres vsechny pracovni linky jednoho stavu kapacit; DAJ: DeskArrayAll = všechny pracovní linky, tj. standardní (DeskArrayStd) + navýšená (DeskArrayInc) kapacita
                 {
+                    if (desk == null) continue;                             // DAJ: pole někdy může obsahovat NULL prvky
                     foreach (CapacityJobItemCls job in desk.JobList)        //pres vsechny ukoly jedne pracovni linky
                     {
                         workUnit = (WorkUnitCls)job.WorkUnit;
@@ -977,9 +1095,9 @@ namespace Noris.Schedule.Extender
 
        
 
-        #endregion
+#endregion
         
-        #region FindTarget
+#region FindTarget
         private void _FindInterGraphTargetData(DataSourceRequest requestInput)
         {
             DataSourceRequestFindInterGraph request;
@@ -989,8 +1107,8 @@ namespace Noris.Schedule.Extender
             {
                 int workID;
                 WorkUnitCls homeWork;
-                CapacityPlanWorkItemCls task;
-                MaterialPlanAxisItemCls axis;
+                PlanItemTaskC task;
+                PlanItemAxisS axis;
                 DataPointerStr pointer;
 
                 workID = request.SourceElement.Element.RecordNumber;
@@ -1033,9 +1151,9 @@ namespace Noris.Schedule.Extender
                 }
             }
         }
-        #endregion
+#endregion
 
-        #region CreateRelations
+#region CreateRelations
         private void _CreateRelations(DataSourceRequest requestInput)
         {
             DataSourceRequestReadRelations request;
@@ -1045,7 +1163,7 @@ namespace Noris.Schedule.Extender
             {
                 int workID;
                 WorkUnitCls workUnit;
-                CapacityPlanWorkItemCls task;
+                PlanItemTaskC task;
                 WorkTimeCls lastTime;
 
                 workID = request.RequestElementPointer.Element.RecordNumber;
@@ -1134,18 +1252,18 @@ namespace Noris.Schedule.Extender
                 }
             }
         }
-        #endregion
+#endregion
 
-        #region POMOCNÉ METODY A DATA
+#region POMOCNÉ METODY A DATA
 		public static T Get<T>(DataRow row, string column)
 		{
 			if (row.IsNull(column))
 				return default (T);
 			return (T)row[column];
 		}
-		#endregion
+#endregion
 
-        #region IEvaluationDataSource Members
+#region IEvaluationDataSource Members
 
         public bool TryGetDataObject(EvaluationDataSourceGetObjectArgs args)
         {
@@ -1162,9 +1280,9 @@ namespace Noris.Schedule.Extender
             return ((IEvaluationDataSource)PlanningProcess).TryGetValue(args);
         }
 
-        #endregion
+#endregion
 
-        #region IClassTreeExtender Members
+#region IClassTreeExtender Members
 
         public void GetExtendedAttributes(ClassTreeExtenderGetAttributesArgs args)
         {
@@ -1177,11 +1295,11 @@ namespace Noris.Schedule.Extender
             ((IClassTreeExtender)PlanningProcess).GetExtendedRelations(args);
         }
 
-        #endregion
+#endregion
     }
-	#endregion
+#endregion
 
-    #region DEFAULT PAINTER - pro graf TaskCapacityLink a vrstvu ItemLayer
+#region DEFAULT PAINTER - pro graf TaskCapacityLink a vrstvu ItemLayer
     /// <summary>
     /// Painter pro Item elementy grafu TaskCapacity
     /// </summary>
@@ -1263,14 +1381,14 @@ namespace Noris.Schedule.Extender
         void IGraphElementPainter.PaintAfter(GraphElementPainterArgs args)
         { }
     }
-    #endregion
+#endregion
 
 
 
 /*
     class aaa : IDataSource
     {
-        #region IDataSource Members
+#region IDataSource Members
 
         public DataSourceProperties Properties
         {
@@ -1338,7 +1456,7 @@ namespace Noris.Schedule.Extender
             throw new NotImplementedException();
         }
 
-        #endregion
+#endregion
     }
     */
 }
