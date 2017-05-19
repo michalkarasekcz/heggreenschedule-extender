@@ -79,6 +79,7 @@
       <DependentUpon>ZaplanujKombinaci.cs</DependentUpon>
     </Compile>
     <Compile Include="Function.cs" />
+    <Compile Include="Globals.cs" />
     <Compile Include="Link.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -103,6 +104,7 @@
   </Target>
   -->
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetDir)$(TargetName).*"  ..\..\..\Bin\*.*</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>
