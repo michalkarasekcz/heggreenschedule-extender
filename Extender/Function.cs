@@ -1,4 +1,5 @@
-﻿//#define XMLComunicator
+﻿//#define TRACEEXTENDER
+//#define REPLAN
 
 using System;
 using System.Collections.Generic;
@@ -17,8 +18,78 @@ using XmlCommunicator;
 
 namespace Noris.Schedule.Extender
 {
+    public class SaveAndRunFunction : IFunctionGlobal
+    {
+        void IFunctionGlobal.CreateToolItem(FunctionGlobalCreateArgs args)
+        {
+            if (!Steward.RunReadOnly)
+            {
+                args.AddItem(FunctionGlobalItem.CreateSeparator());
+                FunctionGlobalItem gatemaSave = FunctionGlobalItem.CreateButton(this, "GatemSave", Planning.Services.PicLibrary32.Floppy_disc_down_32_FromFile, "Uložit a vystavit VP", "Uloží data a spustí funkci na vystavení VP");
+                args.AddItem(gatemaSave);
+            }
+        }
+
+        void IFunctionGlobal.RunToolItem(FunctionGlobalRunArgs args)
+        {
+            //Standardní uložení dat PT
+            MfrPlanningConnectorCls planningDs = args.GetExternalDataSource(typeof(MfrPlanningConnectorCls)) as MfrPlanningConnectorCls;
+            planningDs.PlanningData.SaveAllData();
+
+            //Spuštění funkce na vystavení VP
+            //if (Globals.RunHeGFunction(classNumber, functionShortName, recordNumbers))
+            //    MessageBox.Show("Úspěšné ukončení funkce.");
+            //else
+            //    MessageBox.Show("Neúspěšné ukončení funkce.");
+        }
+    }
+
+    public class FilterWorkplace : IFunctionMenuItem
+    {
+        bool IFunctionMenuItem.IsFunctionSuitableFor(FunctionMenuItemSuitableArgs args)
+        {
+            bool result;
+
+            result = (args.KeyGraphMode == RowGraphMode.TaskCapacityLink &&
+                args.KeyAreaType == FunctionMenuItemAreaType.RowHeader &&
+                (args.KeyRowClassNumber == 0x4001 || args.KeyRowClassNumber == PlanUnitCCls.ClassNr));
+            if (result)
+            {
+                args.MenuCaption = "Zobrazit / skrýt nadřízené pracoviště";
+                args.MenuToolTipText = "Zobrazit / skrýt nadřízené pracoviště";
+            }
+            return result;
+        }
+
+        bool IFunctionMenuItem.IsMenuItemEnabledFor(Noris.Schedule.Support.Services.FunctionMenuItemRunArgs args)
+        {
+            return true;
+        }
+
+        void IFunctionMenuItem.Run(FunctionMenuItemRunArgs args)
+        {
+            if (args.DataSource is ExtenderDataSource)
+            {
+                ExtenderDataSource data = (ExtenderDataSource)args.DataSource;
+                foreach (var unit in data.PlanningProcess.DataCapacityUnit.Values.Where(item => data.LisovnaUnits.Contains(item.PlanUnitData.RecordNumber)))
+                {
+                    args.ResultRowFilterList.Add(unit.PlanUnitData.GId);
+                }
+                if (!data.IsHideParentWorkplace)
+                {
+                    data.IsHideParentWorkplace = true;
+                }
+                else
+                {
+                    args.ResultRowFilterList.Add(new GID(0x4001, 1));
+                    data.IsHideParentWorkplace = false;
+                }
+            }
+        }
+    }
+
     public class PlanCombin : IFunctionMenuItem
-    {       
+    {
         bool IFunctionMenuItem.IsFunctionSuitableFor(FunctionMenuItemSuitableArgs args)
         {
             bool result;
@@ -50,30 +121,48 @@ namespace Noris.Schedule.Extender
             DateTime startTimeForChange;           
             List<DataPointerStr> splitElements;
             List<int> splitWorkItemIDs;
-           
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Zahájení funkce Zaplánuj kombinaci" };
+            }
+#endif
+
             data = (ExtenderDataSource)args.DataSource;
             // kolekce vsech polozek jedne kombinace konkretnich vylisku a prvni vyrobni operace pro tuto kombinaci
-            Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem = _GetCombinItemsFirstWorkItem(data, args.ClickedItem.Row.RecordNumber);
+            Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem = _GetCombinItemsFirstWorkItem(data, args.ClickedItem.Row.RecordNumber);
             if (_SetParams(data, combinItemsFirstWorkItem, out qtyForChange, out startTimeForChange, out workplaceForChange))
             {
                 splitElements = _Split(data, combinItemsFirstWorkItem, qtyForChange, ref args);
                 splitWorkItemIDs = _MoveUnitAndTime(data, splitElements, workplaceForChange, startTimeForChange, ref args);
                 _CreateLink(data, splitWorkItemIDs, args.ClickedItem.Row.RecordNumber);
+#if (REPLAN)
                 _RunPlanningRePlanUnfixedToHistory(data);
+#endif
                 _Refresh(data, splitElements, args);
                 MessageBox.Show("Úspěšné ukončení funkce.");
-            }           
+            }
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Ukončení funkce Zaplánuj kombinaci" };
+            }
+#endif
         }
 
-        private bool _SetParams(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, out decimal pocet_zalisu, out DateTime startTime, out int workplace)
+        private bool _SetParams(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem, out decimal pocet_zalisu, out DateTime startTime, out int workplace)
         {
             bool result = true;
             ZaplanujKombinaci paramsForm;
-            List<KeyValuePair<int, string>> workplaceList;
+            List<KeyValuePair<int, string>> baseWorkpalceList;
+            List<KeyValuePair<int, string>> alternativeWorkplaceList;
 
             pocet_zalisu = _GetMinQty(combinItemsFirstWorkItem);
-            workplaceList = _GetWorkplaceList(data, combinItemsFirstWorkItem);
-            paramsForm = new ZaplanujKombinaci(data, combinItemsFirstWorkItem, pocet_zalisu, workplaceList);
+            baseWorkpalceList = _GetBaseWorkplace(data, combinItemsFirstWorkItem);
+            alternativeWorkplaceList = _GetAlternativeWorkplaceList(data, combinItemsFirstWorkItem);
+            paramsForm = new ZaplanujKombinaci(data, combinItemsFirstWorkItem, pocet_zalisu, baseWorkpalceList, alternativeWorkplaceList);
             paramsForm.ShowDialog();
 
             result = paramsForm.OK;
@@ -91,25 +180,25 @@ namespace Noris.Schedule.Extender
         /// <param name="data"></param>
         /// <param name="pressFactCombin">daná Konkrétní kombinace výlisků</param>
         /// <returns></returns>
-        private Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> _GetCombinItemsFirstWorkItem(ExtenderDataSource data, int pressFactCombin)
+        private Dictionary<PressFactCombinDataCls, PlanItemTaskC> _GetCombinItemsFirstWorkItem(ExtenderDataSource data, int pressFactCombin)
         {    
             // kolekce konktretni kombinace a vyrobni operace      
-            Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> result = new Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls>();                                                           
-            IEnumerable<KeyValuePair<int, MaterialPlanAxisItemCls>> axises;
+            Dictionary<PressFactCombinDataCls, PlanItemTaskC> result = new Dictionary<PressFactCombinDataCls, PlanItemTaskC>();                                                           
+            IEnumerable<KeyValuePair<int, PlanItemAxisS>> axises;
 
             // V cyklu budu prochazet ty polozky kombinaci, jejich cislo_subjektu je rovno pressFactCombin z parametru
             foreach (PressFactCombinDataCls combinItem in data.CombinData.Where(item => item.CisloSubjektu == pressFactCombin))
             {
-                List<KeyValuePair<int, CapacityPlanWorkItemCls>> workItems = new List<KeyValuePair<int, CapacityPlanWorkItemCls>>();
+                List<KeyValuePair<int, PlanItemTaskC>> workItems = new List<KeyValuePair<int, PlanItemTaskC>>();
                // ze seznamu materialovych os S vyberu jen ty materialove OSY, ktere maji dilec VTPV (vyvojove TPV) stejne jako je dilec na polozce konkretni kombinace vylisku a datum na ose S NENI FIXNI
                 axises = data.PlanningProcess.DataAxisS.Where(axis => axis.Value.ConstrElement == combinItem.ConstrElementItem && !axis.Value.IsFixedAxis);                
-                foreach (KeyValuePair<int, MaterialPlanAxisItemCls> axis in axises)
+                foreach (KeyValuePair<int, PlanItemAxisS> axis in axises)
                 {
                     // z datoveho zdroje hledam prvni nefixovavnou vyrobni operaci pro danou materialovou osu ( axis key = identifikator materialove osy)
-                    KeyValuePair<int, CapacityPlanWorkItemCls>  workItem = _GetFirstWorkItem(data, axis.Key); 
+                    KeyValuePair<int, PlanItemTaskC>  workItem = _GetFirstWorkItem(data, axis.Key); 
                     if (workItem.Key > 0)                    
                         workItems.Add(workItem);                                   
-                }                
+                }
                 if (workItems.Count > 0)
                 {
                     workItems.Sort(_CompareWorkItemStart);
@@ -132,10 +221,10 @@ namespace Noris.Schedule.Extender
         /// <param name="combinItemsFirstWorkItem"></param>
         /// <param name="workplace"></param>
         /// <returns></returns>
-        public static DateTime GetStartTime(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, int workplace)
+        public static DateTime GetStartTime(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem, int workplace)
         {
             DateTime result, maxFixWorkItemTime, minCombinWorkItemTime;
-            KeyValuePair<int, CapacityPlanWorkItemCls> workItem;
+            KeyValuePair<int, PlanItemTaskC> workItem;
 
             //a) konec posledniho fixovaneho ukolu KPJ daneho pracoviste
             workItem = _GetLastFixWorkItem(data, workplace);
@@ -155,26 +244,26 @@ namespace Noris.Schedule.Extender
         /// <param name="data"></param>
         /// <param name="axis">identifikator materialove osy</param>
         /// <returns></returns>
-        private static KeyValuePair<int, CapacityPlanWorkItemCls> _GetFirstWorkItem(ExtenderDataSource data, int axis)
+        private static KeyValuePair<int, PlanItemTaskC> _GetFirstWorkItem(ExtenderDataSource data, int axis)
         {
-            KeyValuePair<int, CapacityPlanWorkItemCls> result;          
+            KeyValuePair<int, PlanItemTaskC> result;          
             List<KeyValuePair<int, decimal>> units;
-            List<KeyValuePair<int, CapacityPlanWorkItemCls>> workItemsWithUnit = new List<KeyValuePair<int, CapacityPlanWorkItemCls>>(); // kolekce vsech operaci pro danou maetrialovou osu            
+            List<KeyValuePair<int, PlanItemTaskC>> workItemsWithUnit = new List<KeyValuePair<int, PlanItemTaskC>>(); // kolekce vsech operaci pro danou maetrialovou osu            
             
             // budu prochazet vsechny vyrobni operace (kapacitni ukoly), ktere nalezi na dane materialove ose dilce "axis" a nejsou fixovanne
-            foreach (KeyValuePair<int, CapacityPlanWorkItemCls> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.AxisID == axis && !w.Value.IsFixedTask))
+            foreach (KeyValuePair<int, PlanItemTaskC> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.AxisID == axis && !w.Value.IsFixed))
             {
                 units = workItem.Value.GetAllPlanUnitCCapacityList(); // pro kazdou vyrobni operace zjistim vsechny kapacitni jednotky, ktere se pro danou operaci vyuzivaji
 
                 // zjistim  kolik z techto  kapacitnich jednotek ma zdroj na pracovisti Lisovna. Pokud existuje aspon jedna jednotka, pak pridam kapacitni ukol
                 if (units.Where(item => data.LisovnaUnits.Contains(item.Key)).Count() > 0)
                     workItemsWithUnit.Add(workItem);
-                                                                    
+
                
                 /*   kod Jitky Tesarove
                 foreach (KeyValuePair<int, decimal> unit in units)
                     if (data.LisovnaUnits.Contains(unit.Key))
-                        workItemsWithUnit.Add(new KeyValuePair<int, CapacityPlanWorkItemCls>(workItem.Key, workItem.Value));
+                        workItemsWithUnit.Add(new KeyValuePair<int, PlanItemTaskC>(workItem.Key, workItem.Value));
                  */
             }
             if (workItemsWithUnit.Count > 0)
@@ -183,7 +272,7 @@ namespace Noris.Schedule.Extender
                 result = workItemsWithUnit[0];
             }
             else
-                result = new KeyValuePair<int, CapacityPlanWorkItemCls>();
+                result = new KeyValuePair<int, PlanItemTaskC>();
             return result;
         }
 
@@ -193,15 +282,15 @@ namespace Noris.Schedule.Extender
         /// <param name="data"></param>
         /// <param name="workplace"></param>
         /// <returns></returns>
-        private static KeyValuePair<int, CapacityPlanWorkItemCls> _GetLastFixWorkItem(ExtenderDataSource data, int workplace)
+        private static KeyValuePair<int, PlanItemTaskC> _GetLastFixWorkItem(ExtenderDataSource data, int workplace)
         {
-            KeyValuePair<int, CapacityPlanWorkItemCls> result;                       
+            KeyValuePair<int, PlanItemTaskC> result;                       
             List<KeyValuePair<int, decimal>> units;
-            List<KeyValuePair<int, CapacityPlanWorkItemCls>> workItemsWithUnit = new List<KeyValuePair<int, CapacityPlanWorkItemCls>>();          
+            List<KeyValuePair<int, PlanItemTaskC>> workItemsWithUnit = new List<KeyValuePair<int, PlanItemTaskC>>();          
             CapacityUnitCls workUnit = _GetUnit(data, workplace);  // ziskam kapacitni jednotku pro dane pracoviste (workplace)
-           
+
             // prochayi vsechny FIXOVANE vyrobni operace
-            foreach (KeyValuePair<int, CapacityPlanWorkItemCls> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.IsFixedTask))
+            foreach (KeyValuePair<int, PlanItemTaskC> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.IsFixed))
             {
                 // pro kazdy kapacitni ukol hledam kapacitni jednotky, ktere jsou vazany na stejne pracoviste (klic kapactnich jednotek = klic kapacitni jednotky dohledane podle pracoviste
                 units = workItem.Value.GetAllPlanUnitCCapacityList();  // pro vyrobni operaci dohledma vsechny kapacitni jednotky
@@ -211,7 +300,7 @@ namespace Noris.Schedule.Extender
                 
                 //foreach (KeyValuePair<int, decimal> unit in units.Where(item => item.Key == workUnit.PlanUnitC)) // z vyrobni operace vyberu jen ty jeji kapacitni jednotky, jejich6 kli4 je stejnz jako klic kapactni jednotku pro dane pracoviste
                 //{                   
-                //    workItemsWithUnit.Add(new KeyValuePair<int, CapacityPlanWorkItemCls>(workItem.Key, workItem.Value));
+                //    workItemsWithUnit.Add(new KeyValuePair<int, PlanItemTaskC>(workItem.Key, workItem.Value));
                 //}
             }
             if (workItemsWithUnit.Count > 0)
@@ -220,7 +309,7 @@ namespace Noris.Schedule.Extender
                 result = workItemsWithUnit[workItemsWithUnit.Count - 1];    // vyberu posledni 
             }
             else
-                result = new KeyValuePair<int, CapacityPlanWorkItemCls>();
+                result = new KeyValuePair<int, PlanItemTaskC>();
             return result;
         }
 
@@ -230,7 +319,7 @@ namespace Noris.Schedule.Extender
         /// <param name="workItem1"></param>
         /// <param name="workItem2"></param>
         /// <returns></returns>
-        private static int _CompareWorkItemStart(KeyValuePair<int, CapacityPlanWorkItemCls> workItem1, KeyValuePair<int, CapacityPlanWorkItemCls> workItem2)
+        private static int _CompareWorkItemStart(KeyValuePair<int, PlanItemTaskC> workItem1, KeyValuePair<int, PlanItemTaskC> workItem2)
         {
             int result;
             result = workItem1.Value.TimeWork.Begin.CompareTo(workItem2.Value.TimeWork.Begin);
@@ -242,7 +331,7 @@ namespace Noris.Schedule.Extender
         /// <param name="workItem1"></param>
         /// <param name="workItem2"></param>
         /// <returns></returns>
-        private static int _CompareWorkItemEnd(KeyValuePair<int, CapacityPlanWorkItemCls> workItem1, KeyValuePair<int, CapacityPlanWorkItemCls> workItem2)
+        private static int _CompareWorkItemEnd(KeyValuePair<int, PlanItemTaskC> workItem1, KeyValuePair<int, PlanItemTaskC> workItem2)
         {
             int result;
             result = workItem1.Value.TimeWork.End.CompareTo(workItem2.Value.TimeWork.End);
@@ -256,12 +345,12 @@ namespace Noris.Schedule.Extender
         /// </summary>
         /// <param name="combinItemsFirstWorkItem"></param>
         /// <returns></returns>
-        private static decimal _GetMinQty(Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem)
+        private static decimal _GetMinQty(Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem)
         {
             decimal pocet_zdvihu = 0, qty;                        
-            Dictionary<CapacityPlanWorkItemCls, decimal> workItemsParalel = _GetWorkItemsParalel(combinItemsFirstWorkItem);            
+            Dictionary<PlanItemTaskC, decimal> workItemsParalel = _GetWorkItemsParalel(combinItemsFirstWorkItem);            
             // prochazim vsechny paralelni vyrobni operace
-            foreach (KeyValuePair<CapacityPlanWorkItemCls, decimal> workItemParalel in workItemsParalel) // v decimal je pocet paralelnich operaci
+            foreach (KeyValuePair<PlanItemTaskC, decimal> workItemParalel in workItemsParalel) // v decimal je pocet paralelnich operaci
             {
                 qty = Math.Round(workItemParalel.Key.QtyRequired / workItemParalel.Value, 2);  // pocet zdvihu lisu, pri danem mnozstvi/ pocet parallenich pruchodu
                 if (pocet_zdvihu == 0 || pocet_zdvihu > qty)
@@ -277,28 +366,37 @@ namespace Noris.Schedule.Extender
         /// </summary>
         /// <param name="combinItemsFirstWorkItem"></param>
         /// <returns></returns>
-        private static DateTime _GetMinDateTime(Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem)
+        private static DateTime _GetMinDateTime(Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem)
         {           
            DateTime result = DateTime.MinValue;
-            foreach (KeyValuePair<PressFactCombinDataCls, CapacityPlanWorkItemCls> c in combinItemsFirstWorkItem)
+            foreach (KeyValuePair<PressFactCombinDataCls, PlanItemTaskC> c in combinItemsFirstWorkItem)
                 if (c.Value != null && (result == DateTime.MinValue || result > c.Value.StartTime))
                     result = c.Value.TimeWork.Begin;
             
             return result;
         }
 
+		private static List<KeyValuePair<int, string>> _GetBaseWorkplace(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem)
+        {           
+            List<KeyValuePair<int, string>> result = new List<KeyValuePair<int, string>>();
+            foreach (KeyValuePair<PressFactCombinDataCls, PlanItemTaskC> c in combinItemsFirstWorkItem)
+                foreach (KeyValuePair<int, string> wokplace in c.Key.BaseWorkplace)
+                    if (!result.Contains(wokplace))
+                        result.Add(wokplace);
+            return result;
+        }
         /// <summary>
-        /// Vrácí seznam všech pracovišť dané Konkrétní kombinace výlisků (DV 22919).
+        /// Vrácí seznam alternativních pracovišť dané Konkrétní kombinace výlisků (DV 22919).
         /// Pokud neexistuje ani jedno pracoviště, vrací prázdný seznam.
         /// </summary>
         /// <param name="data"></param>
         /// <param name="pressFactCombin"></param>
         /// <returns></returns>
-        private static List<KeyValuePair<int, string>> _GetWorkplaceList(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem)
+        private static List<KeyValuePair<int, string>> _GetAlternativeWorkplaceList(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem)
         {           
             List<KeyValuePair<int, string>> result = new List<KeyValuePair<int, string>>();
-            foreach (KeyValuePair<PressFactCombinDataCls, CapacityPlanWorkItemCls> c in combinItemsFirstWorkItem)
-                foreach (KeyValuePair<int, string> wokplace in c.Key.Workplaces)
+            foreach (KeyValuePair<PressFactCombinDataCls, PlanItemTaskC> c in combinItemsFirstWorkItem)
+                foreach (KeyValuePair<int, string> wokplace in c.Key.AlternativeWorkplaces)
                     if (!result.Contains(wokplace))
                         result.Add(wokplace);
             return result;
@@ -332,15 +430,15 @@ namespace Noris.Schedule.Extender
         /// <param name="qty"></param>
         /// <param name="args"></param>
         /// <returns></returns>
-        private List<DataPointerStr> _Split(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem, decimal zdvihy, ref FunctionMenuItemRunArgs args)
+        private List<DataPointerStr> _Split(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem, decimal zdvihy, ref FunctionMenuItemRunArgs args)
         {
             
             List<DataPointerStr> result = new List<DataPointerStr>();
             // Vyrobni operace a pocet jejich vyskytu na prvni pozici ze vsech polozek kombinaci vylisku
-            Dictionary<CapacityPlanWorkItemCls, decimal> workItemsParalel = _GetWorkItemsParalel(combinItemsFirstWorkItem);
+            Dictionary<PlanItemTaskC, decimal> workItemsParalel = _GetWorkItemsParalel(combinItemsFirstWorkItem);
             
             // prochazim jednotlive vyrobni operace, ktere jsou zastoupeny v konkretni kombinaci vylisku
-            foreach (KeyValuePair<CapacityPlanWorkItemCls, decimal> workItemParalel in workItemsParalel)  // 
+            foreach (KeyValuePair<PlanItemTaskC, decimal> workItemParalel in workItemsParalel)  // 
             {                              
                 decimal mnozstvi_zaplanovat_celkem = zdvihy * workItemParalel.Value; // celkove mnoztvi  = pocet zdvihu lisu * pocet paralelnich pruchodu. (na jeden zdvih se mohou vylisovat 2 stejne dilce)
                 if (workItemParalel.Value == 1M) // vyrobni operace ma pouze jeden paralelni pruchod
@@ -348,7 +446,7 @@ namespace Noris.Schedule.Extender
                 else
                 {   
                     // vyrobni operace ma vice paralelnich pruchodů                            
-                    KeyValuePair<CapacityPlanWorkItemCls, decimal> wip = workItemParalel;
+                    KeyValuePair<PlanItemTaskC, decimal> wip = workItemParalel;
                     if (workItemParalel.Key.QtyRequired != mnozstvi_zaplanovat_celkem) // Pokud je celkove mnozstvi jine nez mnozstvi, ktere se ma zaplanovat, pak jej rozdelim na pozadovane mnozstvi a zbytkove
                     {                                                                   
                         List<DataPointerStr> pom = _SplitAxis(data, workItemParalel, mnozstvi_zaplanovat_celkem, ref args);
@@ -356,8 +454,8 @@ namespace Noris.Schedule.Extender
                         {
                             WorkUnitCls workUnit = data.PlanningProcess.PlanningData.FindWorkUnit(pom[0]); // pro prvni pointer naleznu pracovni jednotku (KPJ)
                             //WorkUnitCls workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(pom[0].Element.RecordNumber);    // vysledky planovaciho procesu = jednotka prace
-                            CapacityPlanWorkItemCls workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workUnit.TaskID);      // pro kapacitni jednotku najdu prislusnou vyrobni operaci (ulohu)                           
-                            wip = new KeyValuePair<CapacityPlanWorkItemCls, decimal>(workItem, workItemParalel.Value);  // 
+                            PlanItemTaskC workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workUnit.TaskID);      // pro kapacitni jednotku najdu prislusnou vyrobni operaci (ulohu)                           
+                            wip = new KeyValuePair<PlanItemTaskC, decimal>(workItem, workItemParalel.Value);  // 
                         }
                     }
                     // ve wip je vyrobni uloha, jiz upravena na pozdaovane mnozstvi ktere se ma zaplanovat
@@ -375,7 +473,7 @@ namespace Noris.Schedule.Extender
         /// <param name="qty"></param>
         /// <param name="args"></param>
         /// <returns></returns>
-        private List<DataPointerStr> _SplitAxis(ExtenderDataSource data, KeyValuePair<CapacityPlanWorkItemCls, decimal> workItemParalel, decimal mnozstvi_zaplanovat, ref FunctionMenuItemRunArgs args)
+        private List<DataPointerStr> _SplitAxis(ExtenderDataSource data, KeyValuePair<PlanItemTaskC, decimal> workItemParalel, decimal mnozstvi_zaplanovat, ref FunctionMenuItemRunArgs args)
         {                      
             List<DataPointerStr> result = new List<DataPointerStr>();
             List<KeyValuePair<int, WorkUnitCls>> workUnits = _GetWorkUnits(workItemParalel.Key); // pro vyrobni operaci dohledam pracovni jednotky (KPJ)
@@ -414,7 +512,7 @@ namespace Noris.Schedule.Extender
         /// <param name="qty">mnozství na jednom paralelním průchodu</param>
         /// <param name="args"></param>
         /// <returns></returns>
-        private List<DataPointerStr> _SplitTaskParalel(ExtenderDataSource data, KeyValuePair<CapacityPlanWorkItemCls, decimal> workItemParalel, decimal qty, ref FunctionMenuItemRunArgs args)
+        private List<DataPointerStr> _SplitTaskParalel(ExtenderDataSource data, KeyValuePair<PlanItemTaskC, decimal> workItemParalel, decimal qty, ref FunctionMenuItemRunArgs args)
         {
             List<DataPointerStr> result = new List<DataPointerStr>();             
             //DAJ
@@ -471,12 +569,12 @@ namespace Noris.Schedule.Extender
         /// </summary>
         /// <param name="combinItemsFirstWorkItem"></param>
         /// <returns></returns>
-        private static Dictionary<CapacityPlanWorkItemCls, decimal> _GetWorkItemsParalel(Dictionary<PressFactCombinDataCls, CapacityPlanWorkItemCls> combinItemsFirstWorkItem)
+        private static Dictionary<PlanItemTaskC, decimal> _GetWorkItemsParalel(Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem)
         {
-            Dictionary<CapacityPlanWorkItemCls, decimal> result = new Dictionary<CapacityPlanWorkItemCls, decimal>();
-            IEnumerable<KeyValuePair<PressFactCombinDataCls, CapacityPlanWorkItemCls>> pom; // seznam parovych hodnot  Kombinace vylisku a prislusene vyrobni operace
+            Dictionary<PlanItemTaskC, decimal> result = new Dictionary<PlanItemTaskC, decimal>();
+            IEnumerable<KeyValuePair<PressFactCombinDataCls, PlanItemTaskC>> pom; // seznam parovych hodnot  Kombinace vylisku a prislusene vyrobni operace
             // vytvori seznam konkretnich vyrobni operaci a u kayde uvede pocet, kolikrat je operace obsazena v combinItemsFirstWorkItem 
-            foreach (KeyValuePair<PressFactCombinDataCls, CapacityPlanWorkItemCls> c in combinItemsFirstWorkItem)
+            foreach (KeyValuePair<PressFactCombinDataCls, PlanItemTaskC> c in combinItemsFirstWorkItem)
             {
                 pom = combinItemsFirstWorkItem.Where(cPom => cPom.Value != null && cPom.Value.TaskID == c.Value.TaskID);
                 if (c.Value != null && !result.Keys.Contains(c.Value))
@@ -502,8 +600,15 @@ namespace Noris.Schedule.Extender
             moveArgs.SetFixedTask = true; // operace se po presunuti budou fixovat
             moveArgs.PullAdjacentForActiveTask = true;
             moveArgs.PullAdjacentForActiveTree = true;
-            CapacityUnitCls unit = _GetUnit(data, workplace);            
-            
+            CapacityUnitCls unit = _GetUnit(data, workplace);
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Zahájení Move Unit and Time; SplitElements.Count = " + splitElements.Count.ToString() };
+            }
+#endif
+
             foreach (DataPointerStr splitElement in splitElements)
             {               
                 //workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(splitElement.Element);
@@ -515,15 +620,30 @@ namespace Noris.Schedule.Extender
                 moveArgs.AddActiveItem(new PlanningInteractiveMoveActiveItem(workUnit, timeRange, unit.PlanUnitC, workplace));
             }            
             data.PlanningProcess.PlanningData.InteractiveMove(moveArgs);
-            moveArgs.ChangedRowsCopyTo(args);            
+            moveArgs.ChangedRowsCopyTo(args);
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Ukončení Move Unit and Time" };
+            }
+#endif
+
             return result;
         }
 
         private void _CreateLink(ExtenderDataSource data, List<int> splitWorkItemIDs, int pressFactCombin)
         {
             LinkCls link;
-            CapacityPlanWorkItemCls workItem;
+            PlanItemTaskC workItem;
             List<PressFactCombinDataCls> pfcs;
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Zahájení CreateLink; SplitWorkItemsIDs.Count = " + splitWorkItemIDs.Count.ToString() };
+            }
+#endif
 
             link = new LinkCls(true);
             link.PressFactCombin = pressFactCombin;
@@ -539,14 +659,34 @@ namespace Noris.Schedule.Extender
                 workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workItemID);
                 workItem.LinkObject = link;
             }
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Ukončení CreateLink" };
+            }
+#endif
         }
 
         private void _RunPlanningRePlanUnfixedToHistory(ExtenderDataSource data)
         {
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Zahájení RunPlanningRePlanUnfixedToHistory" };
+            }
+#endif
+
             PlanningInteractiveRePlanArgs args = new PlanningInteractiveRePlanArgs();
             args.CapacityLimit = LimitedCType.ByPUCsetting;
-            args.RegisterUnfixedTimeDir = TimeRange.TimeDirection.ToHistory;
-            data.PlanningProcess.PlanningData.InteractivePlanningRePlan(args);
+            args.RePlanRegisterTimeDir = TimeRange.TimeDirection.ToHistory;
+            data.PlanningProcess.PlanningData.PlanRecalculate(args);
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            {
+                scope.User = new string[] { "Ukončení RunPlanningRePlanUnfixedToHistory" };
+            }
+#endif
         }
 
         /// <summary>
@@ -564,7 +704,13 @@ namespace Noris.Schedule.Extender
 
         private void _Refresh(ExtenderDataSource data, List<DataPointerStr> splitElements, FunctionMenuItemRunArgs args)
         {
-                                             
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Refresh", "Extender"))
+            {
+                scope.User = new string[] { "Zahájení obnovení" };
+            }
+#endif
+
             // pridam identifikatory radku, ktere se zmenily. Kdyz se na tyto radky klikne, dojde k znovunacteni dat.
             GID gid;
 
@@ -587,14 +733,20 @@ namespace Noris.Schedule.Extender
             //budu aktualizovat elemnty vsech konkretnich lisu
             foreach (int lisovaUnit in data.LisovnaUnits)
                 args.ResultEditChangedRows.Add(new GID(PlanUnitCCls.ClassNr, lisovaUnit));
-            
+
+#if (TRACEEXTENDER)
+            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Refresh", "Extender"))
+            {
+                scope.User = new string[] { "Ukončení obnovení" };
+            }
+#endif
         }
         /// <summary>
         /// Pro vyrobni operaci zjistim souhrn pracovnij jednotek
         /// </summary>
         /// <param name="workItem"></param>
         /// <returns></returns>
-        private List<KeyValuePair<int, WorkUnitCls>> _GetWorkUnits(CapacityPlanWorkItemCls workItem)
+        private List<KeyValuePair<int, WorkUnitCls>> _GetWorkUnits(PlanItemTaskC workItem)
         {            
             List<KeyValuePair<int, WorkUnitCls>> result = new List<KeyValuePair<int, WorkUnitCls>>();
             foreach (WorkPassCls workPass in workItem.WorkPassList)
@@ -630,7 +782,7 @@ namespace Noris.Schedule.Extender
             bool result;
             ExtenderDataSource data;
             WorkUnitCls workUnitClicked;
-            CapacityPlanWorkItemCls workItemClicked;
+            PlanItemTaskC workItemClicked;                 // DAJ: původně PlanItemTaskC workItemClicked;
 
             if (args.DataSource is ExtenderDataSource)
             {
@@ -646,12 +798,10 @@ namespace Noris.Schedule.Extender
 
         void IFunctionMenuItem.Run(FunctionMenuItemRunArgs args)
         {
-            ExtenderDataSource data;
-            List<int> axises;
-
-            data = (ExtenderDataSource)args.DataSource;
-            axises = _GetAxises(data, args.ClickedItem.Element.RecordNumber);
-            if (_RunNorisFunction(data, PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", PlanUnitSAxisCls.ClassNr, axises))
+            ExtenderDataSource data = (ExtenderDataSource)args.DataSource;
+            List<int> axises = _GetAxises(data, args.ClickedItem.Element.RecordNumber);
+            //if (_RunNorisFunction(data, PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", PlanUnitSAxisCls.ClassNr, axises))
+            if (Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", axises))
                 MessageBox.Show("Úspěšné ukončení funkce.");
             else
                 MessageBox.Show("Neúspěšné ukončení funkce.");
@@ -661,9 +811,9 @@ namespace Noris.Schedule.Extender
         {
             List<int> result;
             WorkUnitCls workUnitClicked;
-            CapacityPlanWorkItemCls workItemClicked;
-            MaterialPlanAxisItemCls axis;
-            IEnumerable<KeyValuePair<int, CapacityPlanWorkItemCls>> workItems;
+            PlanItemTaskC workItemClicked;                 // DAJ: původně PlanItemTaskC workItemClicked;
+            PlanItemAxisS axis;                            // DAJ: původně PlanItemAxisS axis
+            IEnumerable<KeyValuePair<int, PlanItemTaskC>> workItems;
 
             result = new List<int>();
             workUnitClicked = data.PlanningProcess.AxisHeap.FindIWorkItem(workID);
@@ -673,7 +823,7 @@ namespace Noris.Schedule.Extender
 
             workItems = data.PlanningProcess.DataTaskC.Where(task => !task.Value.LinkRecordNumber.IsNull
                 && task.Value.LinkRecordNumber.Value == workItemClicked.LinkRecordNumber.Value);
-            foreach (KeyValuePair<int, CapacityPlanWorkItemCls> workItem in workItems)
+            foreach (KeyValuePair<int, PlanItemTaskC> workItem in workItems)
             {
                 axis = data.PlanningProcess.AxisHeap.FindAxisSItem(workItem.Value.AxisID);
                 if (!result.Contains(axis.RecordNumber))
@@ -683,36 +833,36 @@ namespace Noris.Schedule.Extender
             return result;
         }
 
-        private bool _RunNorisFunction(ExtenderDataSource data, int dataFunctionClassNumber, string dataFunctionName, int recordNumbersClassNumber, List<int> recordNumbers)
-        {
-            bool result = false;                                                    
-            try
-            {
-                if (Steward.HaveCurrentUserPassword())
-                {
+        //private bool _RunNorisFunction(ExtenderDataSource data, int dataFunctionClassNumber, string dataFunctionName, int recordNumbersClassNumber, List<int> recordNumbers)
+        //{
+        //    bool result = false;                                                    
+        //    try
+        //    {
+        //        if (Steward.HaveCurrentUserPassword())
+        //        {
 
-                    string mess;
-                    Noris.WS.ServiceGate.RunFunctionResponse response = Steward.ServiceGateAdapter.RunFunction(dataFunctionClassNumber, dataFunctionName, recordNumbers);
-                    if (response.Auditlog == null)
-                        mess = response.RawXml;
-                    else
-                    {
-                        mess = String.Empty;
-                        if (response.Auditlog.Entries != null)
-                            foreach (AuditlogEntry entry in response.Auditlog.Entries)
-                                mess += entry.Message + "\r\n";
-                    }
-                    if (!string.IsNullOrEmpty(mess))
-                        MessageBox.Show(mess);
-                    result = (response.Auditlog.State != AuditlogState.Failure);
-                }               
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-                result = false;
-            }          
-            return result;
-        }
+        //            string mess;
+        //            Noris.WS.ServiceGate.RunFunctionResponse response = Steward.ServiceGateAdapter.RunFunction(dataFunctionClassNumber, dataFunctionName, recordNumbers);
+        //            if (response.Auditlog == null)
+        //                mess = response.RawXml;
+        //            else
+        //            {
+        //                mess = String.Empty;
+        //                if (response.Auditlog.Entries != null)
+        //                    foreach (AuditlogEntry entry in response.Auditlog.Entries)
+        //                        mess += entry.Message + "\r\n";
+        //            }
+        //            if (!string.IsNullOrEmpty(mess))
+        //                MessageBox.Show(mess);
+        //            result = (response.Auditlog.State != AuditlogState.Failure);
+        //        }               
+        //    }
+        //    catch(Exception ex)
+        //    {
+        //        MessageBox.Show(ex.Message);
+        //        result = false;
+        //    }          
+        //    return result;
+        //}
     }
 }
