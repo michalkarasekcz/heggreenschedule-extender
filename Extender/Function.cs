@@ -11,10 +11,6 @@ using Noris.Schedule.Support;
 using Noris.Schedule.Support.Services;
 using Noris.WS.ServiceGate;
 
-#if XMLComunicator
-using XmlCommunicator;
-#endif
-
 
 namespace Noris.Schedule.Extender
 {
@@ -25,7 +21,7 @@ namespace Noris.Schedule.Extender
             if (!Steward.RunReadOnly)
             {
                 args.AddItem(FunctionGlobalItem.CreateSeparator());
-                FunctionGlobalItem gatemaSave = FunctionGlobalItem.CreateButton(this, "GatemSave", Planning.Services.PicLibrary32.Floppy_disc_down_32_FromFile, "Uložit a vystavit VP", "Uloží data a spustí funkci na vystavení VP");
+                FunctionGlobalItem gatemaSave = FunctionGlobalItem.CreateButton(this, "GatemaSave", Planning.Services.PicLibrary32.Floppy_disc_down_32_FromFile, "Uložit a vystavit VP", "Uloží data a spustí funkci na vystavení VP");
                 args.AddItem(gatemaSave);
             }
         }
@@ -36,11 +32,8 @@ namespace Noris.Schedule.Extender
             MfrPlanningConnectorCls planningDs = args.GetExternalDataSource(typeof(MfrPlanningConnectorCls)) as MfrPlanningConnectorCls;
             planningDs.PlanningData.SaveAllData();
 
-            //Spuštění funkce na vystavení VP
-            //if (Globals.RunHeGFunction(classNumber, functionShortName, recordNumbers))
-            //    MessageBox.Show("Úspěšné ukončení funkce.");
-            //else
-            //    MessageBox.Show("Neúspěšné ukončení funkce.");
+            //Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
+            Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
         }
     }
 
@@ -801,10 +794,7 @@ namespace Noris.Schedule.Extender
             ExtenderDataSource data = (ExtenderDataSource)args.DataSource;
             List<int> axises = _GetAxises(data, args.ClickedItem.Element.RecordNumber);
             //if (_RunNorisFunction(data, PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", PlanUnitSAxisCls.ClassNr, axises))
-            if (Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", axises))
-                MessageBox.Show("Úspěšné ukončení funkce.");
-            else
-                MessageBox.Show("Neúspěšné ukončení funkce.");
+            Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "IssueProductOrderFromTask", axises);
         }
 
         private List<int> _GetAxises(ExtenderDataSource data, int workID)
