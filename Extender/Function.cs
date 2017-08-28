@@ -28,15 +28,29 @@ namespace Noris.Schedule.Extender
 
         void IFunctionGlobal.RunToolItem(FunctionGlobalRunArgs args)
         {
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce Propojení před uložením z PT (GAT).");
+
             // Spuštění funkce Propojení před uložením z PT (GAT)
             Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "PropojeniPredUlozenimZPT", new List<int>());
+
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Dokončena funkce Propojení před uložením z PT (GAT).");
+
 
             // Standardní uložení dat PT
             MfrPlanningConnectorCls planningDs = args.GetExternalDataSource(typeof(MfrPlanningConnectorCls)) as MfrPlanningConnectorCls;
             planningDs.PlanningData.SaveAllData();
+            
+
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce Vystavení VP pro kombinace (GAT).");
 
             // Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
             Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
+
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Dokončena funkce Vystavení VP pro kombinace (GAT).");
         }
     }
 
@@ -125,6 +139,9 @@ namespace Noris.Schedule.Extender
             }
 #endif
 
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce plánovací tabule Zaplánuj kombinaci.");
+
             data = (ExtenderDataSource)args.DataSource;
             // kolekce vsech polozek jedne kombinace konkretnich vylisku a prvni vyrobni operace pro tuto kombinaci
             Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem = _GetCombinItemsFirstWorkItem(data, args.ClickedItem.Row.RecordNumber);
@@ -139,6 +156,9 @@ namespace Noris.Schedule.Extender
                 _Refresh(data, splitElements, args);
                 MessageBox.Show("Úspěšné ukončení funkce.");
             }
+
+            if (Steward.AuditlogIsReady)
+                Steward.Audit(AuditRowType.Info, "Dokončena funkce plánovací tabule Zaplánuj kombinaci.");
 
 #if (TRACEEXTENDER)
             using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
