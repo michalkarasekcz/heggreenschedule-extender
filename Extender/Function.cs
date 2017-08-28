@@ -28,11 +28,14 @@ namespace Noris.Schedule.Extender
 
         void IFunctionGlobal.RunToolItem(FunctionGlobalRunArgs args)
         {
-            //Standardní uložení dat PT
+            // Spuštění funkce Propojení před uložením z PT (GAT)
+            Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "PropojeniPredUlozenimZPT", new List<int>());
+
+            // Standardní uložení dat PT
             MfrPlanningConnectorCls planningDs = args.GetExternalDataSource(typeof(MfrPlanningConnectorCls)) as MfrPlanningConnectorCls;
             planningDs.PlanningData.SaveAllData();
 
-            //Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
+            // Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
             Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
         }
     }
@@ -243,8 +246,9 @@ namespace Noris.Schedule.Extender
             List<KeyValuePair<int, decimal>> units;
             List<KeyValuePair<int, PlanItemTaskC>> workItemsWithUnit = new List<KeyValuePair<int, PlanItemTaskC>>(); // kolekce vsech operaci pro danou maetrialovou osu            
             
-            // budu prochazet vsechny vyrobni operace (kapacitni ukoly), ktere nalezi na dane materialove ose dilce "axis" a nejsou fixovanne
-            foreach (KeyValuePair<int, PlanItemTaskC> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.AxisID == axis && !w.Value.IsFixed))
+            // budu prochazet vsechny vyrobni operace (kapacitni ukoly), ktere nalezi na dane materialove ose dilce "axis" a nejsou fixovanne a nemají navázanou operaci VP
+            foreach (KeyValuePair<int, PlanItemTaskC> workItem in data.PlanningProcess.DataTaskC.Where(w => w.Value.AxisID == axis && !w.Value.IsFixed
+                && w.Value.DocumentType != TDocumentType.Production))
             {
                 units = workItem.Value.GetAllPlanUnitCCapacityList(); // pro kazdou vyrobni operace zjistim vsechny kapacitni jednotky, ktere se pro danou operaci vyuzivaji
 
