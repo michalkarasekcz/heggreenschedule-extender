@@ -29,13 +29,13 @@ namespace Noris.Schedule.Extender
         void IFunctionGlobal.RunToolItem(FunctionGlobalRunArgs args)
         {
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce Propojení před uložením z PT (GAT).");
+                Steward.AuditInfo("Zahájeno spuštění funkce Propojení před uložením z PT (GAT).");
 
             // Spuštění funkce Propojení před uložením z PT (GAT)
             Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "PropojeniPredUlozenimZPT", new List<int>());
 
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Dokončena funkce Propojení před uložením z PT (GAT).");
+                Steward.AuditInfo("Dokončena funkce Propojení před uložením z PT (GAT).");
 
 
             // Standardní uložení dat PT
@@ -44,13 +44,13 @@ namespace Noris.Schedule.Extender
             
 
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce Vystavení VP pro kombinace (GAT).");
+                Steward.AuditInfo("Zahájeno spuštění funkce Vystavení VP pro kombinace (GAT).");
 
             // Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
             Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
 
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Dokončena funkce Vystavení VP pro kombinace (GAT).");
+                Steward.AuditInfo("Dokončena funkce Vystavení VP pro kombinace (GAT).");
         }
     }
 
@@ -140,7 +140,7 @@ namespace Noris.Schedule.Extender
 #endif
 
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Zahájeno spuštění funkce plánovací tabule Zaplánuj kombinaci.");
+                Steward.AuditInfo("Zahájeno spuštění funkce plánovací tabule Zaplánuj kombinaci.");
 
             data = (ExtenderDataSource)args.DataSource;
             // kolekce vsech polozek jedne kombinace konkretnich vylisku a prvni vyrobni operace pro tuto kombinaci
@@ -158,7 +158,7 @@ namespace Noris.Schedule.Extender
             }
 
             if (Steward.AuditlogIsReady)
-                Steward.Audit(AuditRowType.Info, "Dokončena funkce plánovací tabule Zaplánuj kombinaci.");
+                Steward.AuditInfo("Dokončena funkce plánovací tabule Zaplánuj kombinaci.");
 
 #if (TRACEEXTENDER)
             using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
