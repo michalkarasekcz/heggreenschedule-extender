@@ -1,5 +1,4 @@
-﻿//#define TRACEEXTENDER
-//#define REPLAN
+﻿//#define REPLAN
 
 using System;
 using System.Collections.Generic;
@@ -28,29 +27,35 @@ namespace Noris.Schedule.Extender
 
         void IFunctionGlobal.RunToolItem(FunctionGlobalRunArgs args)
         {
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Zahájeno spuštění funkce Propojení před uložením z PT (GAT).");
+            using (var scope = Steward.TraceScopeBeginCritical("NorisFunction.PropojeniPredUlozenimZPT", "NorisFunction.Run", "Extender"))
+            {
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Zahájeno spuštění funkce Propojení před uložením z PT (GAT).");
 
-            // Spuštění funkce Propojení před uložením z PT (GAT)
-            Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "PropojeniPredUlozenimZPT", new List<int>());
+                // Spuštění funkce Propojení před uložením z PT (GAT)
+                Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "PropojeniPredUlozenimZPT", new List<int>());
 
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Dokončena funkce Propojení před uložením z PT (GAT).");
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Dokončena funkce Propojení před uložením z PT (GAT).");
+            }
 
 
             // Standardní uložení dat PT
             MfrPlanningConnectorCls planningDs = args.GetExternalDataSource(typeof(MfrPlanningConnectorCls)) as MfrPlanningConnectorCls;
             planningDs.PlanningData.SaveAllData();
-            
 
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Zahájeno spuštění funkce Vystavení VP pro kombinace (GAT).");
 
-            // Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
-            Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
+            using (var scope = Steward.TraceScopeBeginCritical("NorisFunction.VystaveniVPProKombinace", "NorisFunction.Run", "Extender"))
+            {
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Zahájeno spuštění funkce Vystavení VP pro kombinace (GAT).");
 
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Dokončena funkce Vystavení VP pro kombinace (GAT).");
+                // Spuštění funkce Vystavení VP pro kombinace (GAT) nad Plánovací jednotka S osa
+                Globals.RunHeGFunction(PlanUnitSAxisCls.ClassNr, "VystaveniVPProKombinace", new List<int>());
+
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Dokončena funkce Vystavení VP pro kombinace (GAT).");
+            }
         }
     }
 
@@ -132,40 +137,33 @@ namespace Noris.Schedule.Extender
             List<DataPointerStr> splitElements;
             List<int> splitWorkItemIDs;
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            bool isSuccess = false;
+            using (var scope = Steward.TraceScopeBeginCritical("PlanCombination", "PlanCombinaion.Run", "Extender"))
             {
-                scope.User = new string[] { "Zahájení funkce Zaplánuj kombinaci" };
-            }
-#endif
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Zahájeno spuštění funkce plánovací tabule Zaplánuj kombinaci.");
 
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Zahájeno spuštění funkce plánovací tabule Zaplánuj kombinaci.");
-
-            data = (ExtenderDataSource)args.DataSource;
-            // kolekce vsech polozek jedne kombinace konkretnich vylisku a prvni vyrobni operace pro tuto kombinaci
-            Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem = _GetCombinItemsFirstWorkItem(data, args.ClickedItem.Row.RecordNumber);
-            if (_SetParams(data, combinItemsFirstWorkItem, out qtyForChange, out startTimeForChange, out workplaceForChange))
-            {
-                splitElements = _Split(data, combinItemsFirstWorkItem, qtyForChange, ref args);
-                splitWorkItemIDs = _MoveUnitAndTime(data, splitElements, workplaceForChange, startTimeForChange, ref args);
-                _CreateLink(data, splitWorkItemIDs, args.ClickedItem.Row.RecordNumber);
+                data = (ExtenderDataSource)args.DataSource;
+                // kolekce vsech polozek jedne kombinace konkretnich vylisku a prvni vyrobni operace pro tuto kombinaci
+                Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem = _GetCombinItemsFirstWorkItem(data, args.ClickedItem.Row.RecordNumber);
+                if (_SetParams(data, combinItemsFirstWorkItem, out qtyForChange, out startTimeForChange, out workplaceForChange))
+                {
+                    splitElements = _Split(data, combinItemsFirstWorkItem, qtyForChange, ref args);
+                    splitWorkItemIDs = _MoveUnitAndTime(data, splitElements, workplaceForChange, startTimeForChange, ref args);
+                    _CreateLink(data, splitWorkItemIDs, args.ClickedItem.Row.RecordNumber);
 #if (REPLAN)
-                _RunPlanningRePlanUnfixedToHistory(data);
+                    _RunPlanningRePlanUnfixedToHistory(data);
 #endif
-                _Refresh(data, splitElements, args);
+                    _Refresh(data, splitElements, args);
+                    isSuccess = true;
+                }
+
+                if (Steward.AuditlogIsReady)
+                    Steward.AuditInfo("Dokončena funkce plánovací tabule Zaplánuj kombinaci.");
+            }
+
+            if (isSuccess)
                 MessageBox.Show("Úspěšné ukončení funkce.");
-            }
-
-            if (Steward.AuditlogIsReady)
-                Steward.AuditInfo("Dokončena funkce plánovací tabule Zaplánuj kombinaci.");
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení funkce Zaplánuj kombinaci" };
-            }
-#endif
         }
 
         private bool _SetParams(ExtenderDataSource data, Dictionary<PressFactCombinDataCls, PlanItemTaskC> combinItemsFirstWorkItem, out decimal pocet_zalisu, out DateTime startTime, out int workplace)
@@ -619,32 +617,23 @@ namespace Noris.Schedule.Extender
             moveArgs.PullAdjacentForActiveTree = true;
             CapacityUnitCls unit = _GetUnit(data, workplace);
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            using (var scope = Steward.TraceScopeBeginCritical("PlanCombination", "PlanCombinaion.Run", "Extender"))
             {
-                scope.User = new string[] { "Zahájení Move Unit and Time; SplitElements.Count = " + splitElements.Count.ToString() };
-            }
-#endif
+                scope.UserAddItems($"SplitElements.Count = {splitElements.Count}");
 
-            foreach (DataPointerStr splitElement in splitElements)
-            {               
-                //workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(splitElement.Element);
-                workUnit = data.PlanningProcess.PlanningData.FindWorkUnit(splitElement);
-                if (!result.Contains(workUnit.TaskID))
-                    result.Add(workUnit.TaskID); 
-                // vartim novy casovz interval, kam se mam posunout
-                TimeRange timeRange = workUnit.WorkTime.GetMovedToBegin(time);                              
-                moveArgs.AddActiveItem(new PlanningInteractiveMoveActiveItem(workUnit, timeRange, unit.PlanUnitC, workplace));
-            }            
-            data.PlanningProcess.PlanningData.InteractiveMove(moveArgs);
-            moveArgs.ChangedRowsCopyTo(args);
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení Move Unit and Time" };
+                foreach (DataPointerStr splitElement in splitElements)
+                {
+                    //workUnit = data.PlanningProcess.AxisHeap.FindIWorkItem(splitElement.Element);
+                    workUnit = data.PlanningProcess.PlanningData.FindWorkUnit(splitElement);
+                    if (!result.Contains(workUnit.TaskID))
+                        result.Add(workUnit.TaskID);
+                    // vartim novy casovz interval, kam se mam posunout
+                    TimeRange timeRange = workUnit.WorkTime.GetMovedToBegin(time);
+                    moveArgs.AddActiveItem(new PlanningInteractiveMoveActiveItem(workUnit, timeRange, unit.PlanUnitC, workplace));
+                }
+                data.PlanningProcess.PlanningData.InteractiveMove(moveArgs);
+                moveArgs.ChangedRowsCopyTo(args);
             }
-#endif
 
             return result;
         }
@@ -655,55 +644,33 @@ namespace Noris.Schedule.Extender
             PlanItemTaskC workItem;
             List<PressFactCombinDataCls> pfcs;
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
+            using (var scope = Steward.TraceScopeBeginCritical("PlanCombination", "PlanCombinaion.Run", "Extender"))
             {
-                scope.User = new string[] { "Zahájení CreateLink; SplitWorkItemsIDs.Count = " + splitWorkItemIDs.Count.ToString() };
-            }
-#endif
+                scope.UserAddItems($"SplitWorkItemsIDs.Count = {splitWorkItemIDs.Count}");
 
-            link = new LinkCls(true);
-            link.PressFactCombin = pressFactCombin;
-            link.FolderNumber = 22228;
-            pfcs = PressFactCombinDataCls.GetPressFactCombin(data.CombinData, pressFactCombin);
-            if (pfcs.Count > 0)
-            {
-                link.Reference = pfcs[0].Reference;
-                link.Nazev = pfcs[0].Nazev;
+                link = new LinkCls(true);
+                link.PressFactCombin = pressFactCombin;
+                link.FolderNumber = 22228;
+                pfcs = PressFactCombinDataCls.GetPressFactCombin(data.CombinData, pressFactCombin);
+                if (pfcs.Count > 0)
+                {
+                    link.Reference = pfcs[0].Reference;
+                    link.Nazev = pfcs[0].Nazev;
+                }
+                foreach (int workItemID in splitWorkItemIDs)
+                {
+                    workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workItemID);
+                    workItem.LinkObject = link;
+                }
             }
-            foreach (int workItemID in splitWorkItemIDs)
-            {
-                workItem = data.PlanningProcess.AxisHeap.FindTaskCItem(workItemID);
-                workItem.LinkObject = link;
-            }
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení CreateLink" };
-            }
-#endif
         }
 
         private void _RunPlanningRePlanUnfixedToHistory(ExtenderDataSource data)
         {
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
-            {
-                scope.User = new string[] { "Zahájení RunPlanningRePlanUnfixedToHistory" };
-            }
-#endif
-
             PlanningInteractiveRePlanArgs args = new PlanningInteractiveRePlanArgs();
             args.CapacityLimit = LimitedCType.ByPUCsetting;
             args.RePlanRegisterTimeDir = TimeRange.TimeDirection.ToHistory;
             data.PlanningProcess.PlanningData.PlanRecalculate(args);
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Run", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení RunPlanningRePlanUnfixedToHistory" };
-            }
-#endif
         }
 
         /// <summary>
@@ -721,42 +688,33 @@ namespace Noris.Schedule.Extender
 
         private void _Refresh(ExtenderDataSource data, List<DataPointerStr> splitElements, FunctionMenuItemRunArgs args)
         {
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Refresh", "Extender"))
+            using (var scope = Steward.TraceScopeBeginCritical("PlanCombination", "PlanCombinaion.Refresh", "Extender"))
             {
-                scope.User = new string[] { "Zahájení obnovení" };
+                // pridam identifikatory radku, ktere se zmenily. Kdyz se na tyto radky klikne, dojde k znovunacteni dat.
+                GID gid;
+
+                // aktualizuji data zvoleno radku - hlavickovy zaznam (0x4002) a vsechny naleyejici kombinace vylisku
+                foreach (PressFactCombinDataCls combin in data.CombinData)
+                {
+
+                    if (!args.ResultEditChangedRows.Contains(combin.ParentGID))
+                        args.ResultEditChangedRows.Add(combin.ParentGID);
+                    args.ResultEditChangedRows.Add(combin.GID);
+
+                    ////gid = new GID(0x4002, combin.CisloSubjektu);
+                    ////if (!args.ResultEditChangedRows.Contains(gid))
+                    ////    args.ResultEditChangedRows.Add(gid);
+                    ////args.ResultEditChangedRows.Add(new GID(22290, combin.CisloObjektu));
+
+                }
+                args.ResultEditChangedRows.Add(new GID(0x4001, 1)); // zmena na radku pro vsechny lisy 
+
+                //budu aktualizovat elemnty vsech konkretnich lisu
+                foreach (int lisovaUnit in data.LisovnaUnits)
+                    args.ResultEditChangedRows.Add(new GID(PlanUnitCCls.ClassNr, lisovaUnit));
+
+                scope.UserAddItems($"ResultEditChangedRows.Count: {args.ResultEditChangedRows.Count}");
             }
-#endif
-
-            // pridam identifikatory radku, ktere se zmenily. Kdyz se na tyto radky klikne, dojde k znovunacteni dat.
-            GID gid;
-
-            // aktualizuji data zvoleno radku - hlavickovy zaznam (0x4002) a vsechny naleyejici kombinace vylisku
-            foreach (PressFactCombinDataCls combin in data.CombinData)
-            {
-               
-                if (!args.ResultEditChangedRows.Contains(combin.ParentGID))
-                    args.ResultEditChangedRows.Add(combin.ParentGID);
-                args.ResultEditChangedRows.Add(combin.GID);
-               
-                ////gid = new GID(0x4002, combin.CisloSubjektu);
-                ////if (!args.ResultEditChangedRows.Contains(gid))
-                ////    args.ResultEditChangedRows.Add(gid);
-                ////args.ResultEditChangedRows.Add(new GID(22290, combin.CisloObjektu));
-
-            }
-            args.ResultEditChangedRows.Add(new GID(0x4001, 1)); // zmena na radku pro vsechny lisy 
-            
-            //budu aktualizovat elemnty vsech konkretnich lisu
-            foreach (int lisovaUnit in data.LisovnaUnits)
-                args.ResultEditChangedRows.Add(new GID(PlanUnitCCls.ClassNr, lisovaUnit));
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("PlanCombination", "PlanCombinaion.Refresh", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení obnovení" };
-            }
-#endif
         }
         /// <summary>
         /// Pro vyrobni operaci zjistim souhrn pracovnij jednotek

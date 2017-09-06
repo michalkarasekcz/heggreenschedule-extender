@@ -1,5 +1,4 @@
 ﻿#define LOADONDEMAND
-//#define TRACEEXTENDER
 //#define TEST
 
 using System;
@@ -201,29 +200,20 @@ namespace Noris.Schedule.Extender
             result = new Dictionary<int, string>();
             try
             {
-                result = new Dictionary<int, string>();
-                sql = "select w.cislo_subjektu, w.nazev_subjektu"
-                    + " from lcs.uda_workplace uda"
-                    + " join lcs.workplace w on uda.cislo_subjektu = w.cislo_subjektu"
-                    + " where uda.zobrazit_v_pt = 'A'";
-                dt = Db_Layer.GetDataTable(sql);
-
-#if (TRACEEXTENDER)
-                using (var scope = Steward.TraceScopeBegin("Lisovny", "Lisovny.Data", "Extender"))
+                using (var scope = Steward.TraceScopeBeginCritical("Lisovny", "Lisovny.Data", "Extender"))
                 {
-                    scope.User = new string[] { "Lisovny.Count = " + dt.Rows.Count.ToString() };
-                }
-#endif
+                    result = new Dictionary<int, string>();
+                    sql = "select w.cislo_subjektu, w.nazev_subjektu"
+                        + " from lcs.uda_workplace uda"
+                        + " join lcs.workplace w on uda.cislo_subjektu = w.cislo_subjektu"
+                        + " where uda.zobrazit_v_pt = 'A'";
+                    dt = Db_Layer.GetDataTable(sql);
 
-                foreach (DataRow row in dt.Rows)
-                    result.Add(ExtenderDataSource.Get<int>(row, "cislo_subjektu"), ExtenderDataSource.Get<string>(row, "nazev_subjektu"));
+                    foreach (DataRow row in dt.Rows)
+                        result.Add(ExtenderDataSource.Get<int>(row, "cislo_subjektu"), ExtenderDataSource.Get<string>(row, "nazev_subjektu"));
 
-#if (TRACEEXTENDER)
-                using (var scope = Steward.TraceScopeBegin("Lisovny", "Load.Lisovny", "Extender"))
-                {
-                    scope.User = new string[] { "Lisovny.Count = " + result.Count.ToString() };
+                    scope.UserAddItems($"Lisovny.Count = {dt.Rows.Count}");
                 }
-#endif
             }
             catch
             {
@@ -560,76 +550,67 @@ namespace Noris.Schedule.Extender
             DataTable dt;
             PressFactCombinDataCls combin;
 
-            CombinData.Clear();
-            sql = "select pfh.cislo_subjektu, pfh.reference_subjektu, pfh.nazev_subjektu,"
-                + " vsb.cislo_vztaz_subjektu base_workplace, wb.reference_subjektu base_workplace_refer, wb.nazev_subjektu base_workplace_nazev,"
-                + " vs.cislo_vztaz_subjektu alternative_workplace, w.reference_subjektu alternative_workplace_refer, w.nazev_subjektu alternative_workplace_nazev,"
-                + " pfh.constr_element ce, subj_1.reference_subjektu ce_refer, subj_1.nazev_subjektu ce_nazev,"
-                + " pfi.cislo_objektu,"
-                + " pfi.constr_element ce_item, subj_2.reference_subjektu ce_item_refer, subj_2.nazev_subjektu ce_item_nazev"
-                + " from lcs.press_fact_combin_header pfh"
-                + " join lcs.press_fact_combin_item pfi on pfh.cislo_subjektu = pfi.cislo_subjektu"
-                + " join lcs.subjekty subj_1 on pfh.constr_element = subj_1.cislo_subjektu"
-                + " join lcs.subjekty subj_2 on pfi.constr_element = subj_2.cislo_subjektu"
+            using (var scope = Steward.TraceScopeBeginCritical("Combin", "Combin.Data", "Extender"))
+            {
+                CombinData.Clear();
+                sql = "select pfh.cislo_subjektu, pfh.reference_subjektu, pfh.nazev_subjektu,"
+                    + " vsb.cislo_vztaz_subjektu base_workplace, wb.reference_subjektu base_workplace_refer, wb.nazev_subjektu base_workplace_nazev,"
+                    + " vs.cislo_vztaz_subjektu alternative_workplace, w.reference_subjektu alternative_workplace_refer, w.nazev_subjektu alternative_workplace_nazev,"
+                    + " pfh.constr_element ce, subj_1.reference_subjektu ce_refer, subj_1.nazev_subjektu ce_nazev,"
+                    + " pfi.cislo_objektu,"
+                    + " pfi.constr_element ce_item, subj_2.reference_subjektu ce_item_refer, subj_2.nazev_subjektu ce_item_nazev"
+                    + " from lcs.press_fact_combin_header pfh"
+                    + " join lcs.press_fact_combin_item pfi on pfh.cislo_subjektu = pfi.cislo_subjektu"
+                    + " join lcs.subjekty subj_1 on pfh.constr_element = subj_1.cislo_subjektu"
+                    + " join lcs.subjekty subj_2 on pfi.constr_element = subj_2.cislo_subjektu"
 #if (TEST)
-                + " left outer join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
-                + " left outer join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
+                    + " left outer join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
+                    + " left outer join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
 #else
-                + " join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
-                + " join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
+                    + " join lcs.vztahysubjektu vsb on vsb.cislo_subjektu = pfh.cislo_subjektu and vsb.cislo_vztahu = 23546"
+                    + " join lcs.workplace wb on wb.cislo_subjektu = vsb.cislo_vztaz_subjektu and wb.parent_workplace = " + Lisovna.Key.ToString()
 #endif
-                + " left outer join lcs.vztahysubjektu vs on pfh.cislo_subjektu = vs.cislo_subjektu and vs.cislo_vztahu = 22919"
-                + " left outer join lcs.workplace w on vs.cislo_vztaz_subjektu = w.cislo_subjektu"
+                    + " left outer join lcs.vztahysubjektu vs on pfh.cislo_subjektu = vs.cislo_subjektu and vs.cislo_vztahu = 22919"
+                    + " left outer join lcs.workplace w on vs.cislo_vztaz_subjektu = w.cislo_subjektu"
 #if (!TEST)
-                + " where pfh.valid_combin = 'A'"
+                    + " where pfh.valid_combin = 'A'"
 #endif
-                + " order by pfh.cislo_subjektu, pfi.cislo_objektu";
-            dt = Db_Layer.GetDataTable(sql);
+                    + " order by pfh.cislo_subjektu, pfi.cislo_objektu";
+                dt = Db_Layer.GetDataTable(sql);
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("Combin", "Combin.Data", "Extender"))
-            {
-                scope.User = new string[] { "Combin.Count = " + dt.Rows.Count.ToString() + "; Lisovna = " + Lisovna.Value };
-            }
-#endif
-
-            combin = new PressFactCombinDataCls();
-            foreach (DataRow row in dt.Rows)
-            {
-                if (Get<int>(row, "cislo_objektu") != combin.CisloObjektu)
+                combin = new PressFactCombinDataCls();
+                foreach (DataRow row in dt.Rows)
                 {
-                    if (combin.CisloObjektu > 0)
+                    if (Get<int>(row, "cislo_objektu") != combin.CisloObjektu)
                     {
-                        CombinData.Add(combin);
-                        combin = new PressFactCombinDataCls();
+                        if (combin.CisloObjektu > 0)
+                        {
+                            CombinData.Add(combin);
+                            combin = new PressFactCombinDataCls();
+                        }
+                        combin.CisloSubjektu = Get<int>(row, "cislo_subjektu");
+                        combin.Reference = Get<string>(row, "reference_subjektu");
+                        combin.Nazev = Get<string>(row, "nazev_subjektu");
+                        combin.ConstrElement = Get<int>(row, "ce");
+                        combin.CERefer = Get<string>(row, "ce_refer");
+                        combin.CENazev = Get<string>(row, "ce_nazev");
+                        combin.CisloObjektu = Get<int>(row, "cislo_objektu");
+                        combin.ConstrElementItem = Get<int>(row, "ce_item");
+                        combin.CEItemRefer = Get<string>(row, "ce_item_refer");
+                        combin.CEItemNazev = Get<string>(row, "ce_item_nazev");
+                        if (Get<int>(row, "base_workplace") > 0)
+                            combin.BaseWorkplace.Add(Get<int>(row, "base_workplace"), Get<string>(row, "base_workplace_refer") + " - " + Get<string>(row, "base_workplace_nazev"));
+                        if (Get<int>(row, "alternative_workplace") > 0)
+                            combin.AlternativeWorkplaces.Add(Get<int>(row, "alternative_workplace"), Get<string>(row, "alternative_workplace_refer") + " - " + Get<string>(row, "alternative_workplace_nazev"));
                     }
-                    combin.CisloSubjektu = Get<int>(row, "cislo_subjektu");
-                    combin.Reference = Get<string>(row, "reference_subjektu");
-                    combin.Nazev = Get<string>(row, "nazev_subjektu");
-                    combin.ConstrElement = Get<int>(row, "ce");
-                    combin.CERefer = Get<string>(row, "ce_refer");
-                    combin.CENazev = Get<string>(row, "ce_nazev");
-                    combin.CisloObjektu = Get<int>(row, "cislo_objektu");
-                    combin.ConstrElementItem = Get<int>(row, "ce_item");
-                    combin.CEItemRefer = Get<string>(row, "ce_item_refer");
-                    combin.CEItemNazev = Get<string>(row, "ce_item_nazev");
-                    if (Get<int>(row, "base_workplace") > 0)
-                        combin.BaseWorkplace.Add(Get<int>(row, "base_workplace"), Get<string>(row, "base_workplace_refer") + " - " + Get<string>(row, "base_workplace_nazev"));
-                    if (Get<int>(row, "alternative_workplace") > 0)
+                    else // tady se radky namnozi kvuli navazanemu pracovisti
                         combin.AlternativeWorkplaces.Add(Get<int>(row, "alternative_workplace"), Get<string>(row, "alternative_workplace_refer") + " - " + Get<string>(row, "alternative_workplace_nazev"));
                 }
-                else // tady se radky namnozi kvuli navazanemu pracovisti
-                    combin.AlternativeWorkplaces.Add(Get<int>(row, "alternative_workplace"), Get<string>(row, "alternative_workplace_refer") + " - " + Get<string>(row, "alternative_workplace_nazev"));
-            }
-            if (combin.CisloObjektu > 0)
-                CombinData.Add(combin);
+                if (combin.CisloObjektu > 0)
+                    CombinData.Add(combin);
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("Combin", "Load.Combin", "Extender"))
-            {
-                scope.User = new string[] { "Combin.Count = " + CombinData.Count.ToString() };
+                scope.UserAddItems($"SQlData.Count = {dt.Rows.Count}; Lisovna = {Lisovna.Value}; CombinData.Count = {CombinData.Count}");
             }
-#endif
         }
 #endregion
 
@@ -654,13 +635,6 @@ namespace Noris.Schedule.Extender
         /// <param name="request"></param>
         private void _ReadRowsKPJ(DataSourceRequestReadRows request)
         {
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.KPJ", "Extender"))
-            {
-                scope.User = new string[] { "Zahájení vykreslení grafu" };
-            }
-#endif
-
             this.LisovnaUnits = PlanningProcess.CapacityData.FindLinksToCapacityUnitForSource(Lisovna.Key).Select(item => item.PlanUnitC).ToList<int>(); /* vztahy na vsechny KPJ se zdrojem pracoviste Lisovna*/     
             PlanningVisualDataRowCls planningRow;                                
             // První řádek - společný pro všechny lisy
@@ -701,13 +675,6 @@ namespace Noris.Schedule.Extender
             planningRow.AllElementsLoaded = true;
 #endif
             }
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.KPJ", "Extender"))
-            {
-                scope.User = new string[] { "Ukončení vykreslení grafu" };
-            }
-#endif
         }
 
         private string _GetName(int unit)
@@ -740,22 +707,8 @@ namespace Noris.Schedule.Extender
                 // dosel pozadavek na radky (subrows) pro urcity zaznam konkretni kombinace vylisku (TopRow). RecodrNumber v requestu je >0
                 if (request.RequestRowGId.RecordNumber > 0) 
                 {
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Zahájení vykreslení grafu pro záznam: " + request.RequestRowGId.RecordNumber.ToString() };
-                    }
-#endif
-
                     // vsechny kombinace vylisku se stejnym cislem subjektu jako je TopRow
                     IEnumerable<PressFactCombinDataCls> combins = CombinData.Where(c => c.CisloSubjektu == request.RequestRowGId.RecordNumber); // vyberu vsechny kombinace, ktere nalezi k jednou zaznau grafu
-
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Combin.Count = " + combins.Count().ToString() };
-                    }
-#endif
 
                     // pridam prazdne radky do grafu, jako subradky k TopRow
                     foreach (PressFactCombinDataCls combin in combins)
@@ -780,47 +733,11 @@ namespace Noris.Schedule.Extender
                         planningRow.AllElementsLoaded = true;
 #endif
                     }
-
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Ukončení vykreslení grafu pro záznam: " + request.RequestRowGId.RecordNumber.ToString() };
-                    }
-#endif
                 }
                 else // nactu vsechny zaznamy do grafu
                 {
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Zahájení vykreslení grafu" };
-                    }
-#endif
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Combin.Count = " + CombinData.Count.ToString() };
-                    }
-#endif
-
                     int lastCisloSubjektu = 0;
-
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Zahájení setřídění" };
-                    }
-#endif
-
                     CombinData.Sort(PressFactCombinDataCls.CompareByReference); // setridim vsechny polozky
-
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Ukončení setřídění" };
-                    }
-#endif
-
                     foreach (PressFactCombinDataCls combin in CombinData)
                     {
 #if (LOADONDEMAND)
@@ -901,13 +818,6 @@ namespace Noris.Schedule.Extender
                         planningRow.AllElementsLoaded = true;
 #endif
                     }
-
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.Combin", "Extender"))
-                    {
-                        scope.User = new string[] { "Ukončení vykreslení grafu" };
-                    }
-#endif
                 }
             }
 
@@ -978,32 +888,14 @@ namespace Noris.Schedule.Extender
             switch (rowGID.ClassNumber)
             {
                 case 0x4001:              // Řádek "společný za více KPJ"
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.ReadElements.0x4001", "Extender"))
-                    {
-                        scope.User = new string[] { "LisovnaUnits.Count = " + LisovnaUnits.Count.ToString() };
-                    }
-#endif
                     foreach (int planUnitC in LisovnaUnits)
                         elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false, interval));
                     break;
                 case PlanUnitCCls.ClassNr:                // Řádek za konkrétní KPJ
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.ReadElements." + rowGID.ClassNumber.ToString(), "Extender"))
-                    {
-                        scope.User = new string[] { "RecordNumber = " + rowGID.RecordNumber.ToString() };
-                    }
-#endif
                     elements.AddRange(_ReadElementsWorkUnit(rowGID, rowGID.RecordNumber, true, true, interval));
                     break;
                 case 0x4002:               // Parent Row kombinaci / redek ze vsechny polozky kombinace
                 case 22290:                // SubRows kombinace
-#if (TRACEEXTENDER)
-                    using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.ReadElements." + rowGID.ClassNumber.ToString(), "Extender"))
-                    {
-                        scope.User = new string[] { "LisovnaUnits.Count = " + LisovnaUnits.Count.ToString() };
-                    }
-#endif
                     foreach (int planUnitC in LisovnaUnits)
                         elements.AddRange(_ReadElementsWorkUnit(rowGID, planUnitC, false, false, interval)); // budu zobrazovat pouze NEFIXOVANE stavy kapacit
                     break;
@@ -1027,13 +919,6 @@ namespace Noris.Schedule.Extender
                 levelList = unit.GetCurrentCapacityLevels();
             else
                 levelList = unit.GetCapacityLevels(interval);
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.WorkUnit", "Extender"))
-            {
-                scope.User = new string[] { "LeveList.Count = " + levelList.Count.ToString() };
-            }
-#endif
 
             foreach (CapacityLevelItemCls level in levelList)
             {
@@ -1102,13 +987,6 @@ namespace Noris.Schedule.Extender
                 else
                     levelList = unit.GetCapacityLevels(interval);
 
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.WorkUnit", "Extender"))
-                {
-                    scope.User = new string[] { "LeveList.Count = " + levelList.Count.ToString() };
-                }
-#endif
-
                 foreach (CapacityLevelItemCls level in levelList)
                 {
                     if (hasCreateLevel)
@@ -1166,13 +1044,6 @@ namespace Noris.Schedule.Extender
                         }
                     }
                 }
-
-#if (TRACEEXTENDER)
-            using (var scope = Steward.TraceScopeBegin("ReadRows", "ReadRows.WorkUnit", "Extender"))
-                {
-                    scope.User = new string[] { "Ukončení vykreslení grafu" };
-                }
-#endif
             }
 #endif
             return Elements;
